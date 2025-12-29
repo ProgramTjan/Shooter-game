@@ -1,0 +1,50 @@
+# Level Map
+# 0 = lege ruimte
+# 1 = rode bakstenen muur (standaard)
+# 9 = deur
+
+# Mini map schaal
+MINIMAP_SCALE = 5
+MINIMAP_TILE_SIZE = 10
+
+# Level layout (16x16)
+# Alle muren zijn nu rode bakstenen (1), met strategisch geplaatste deuren
+MAP = [
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 9, 0, 0, 1],
+    [1, 0, 0, 9, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 9, 0, 1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
+    [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+    [1, 0, 0, 1, 1, 9, 1, 1, 0, 0, 1, 1, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+]
+
+MAP_WIDTH = len(MAP[0])
+MAP_HEIGHT = len(MAP)
+
+
+def get_map_value(x, y):
+    """Geeft de waarde van een map tile terug"""
+    if 0 <= x < MAP_WIDTH and 0 <= y < MAP_HEIGHT:
+        return MAP[int(y)][int(x)]
+    return 1  # Buiten de map = muur
+
+
+def is_wall(x, y):
+    """Checkt of een positie een muur is (niet 0 en niet open deur)"""
+    val = get_map_value(x, y)
+    return val != 0 and val != 9  # 9 = deur, wordt apart behandeld
+
+
+def is_door(x, y):
+    """Checkt of een positie een deur is"""
+    return get_map_value(x, y) == 9
