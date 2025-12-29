@@ -104,7 +104,9 @@ class Game:
                 elif event.key == pygame.K_1:
                     self.weapons.switch_to(0)  # Pistol
                 elif event.key == pygame.K_2:
-                    self.weapons.switch_to(1)  # Shotgun
+                    self.weapons.switch_to(1)  # MachineGun
+                elif event.key == pygame.K_3:
+                    self.weapons.switch_to(2)  # Shotgun
                 elif event.key == pygame.K_q:
                     self.weapons.next_weapon()
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -131,7 +133,11 @@ class Game:
                 self.hit_marker_time = pygame.time.get_ticks()
                 
                 if killed:
-                    self.kill_text = "ENEMY KILLED!"
+                    # Speciale tekst voor boss kill
+                    if hasattr(enemy, 'is_boss'):
+                        self.kill_text = "BOSS DEFEATED!"
+                    else:
+                        self.kill_text = "ENEMY KILLED!"
                     self.kill_text_time = pygame.time.get_ticks()
                     
                     # Check victory
@@ -157,6 +163,11 @@ class Game:
         self.enemy_manager.update(dt, self.player, self.door_manager)
         self.weapons.update(dt, is_moving)
         self.raycaster.raycast(self.player)
+        
+        # Automatisch vuur (houd muis/spatie ingedrukt)
+        mouse_buttons = pygame.mouse.get_pressed()
+        if mouse_buttons[0] or keys[pygame.K_SPACE]:
+            self.shoot()
         
         # Check vijand aanvallen
         damage = self.enemy_manager.check_player_damage(self.player)
@@ -203,7 +214,11 @@ class Game:
             if enemy.alive:
                 ex = offset_x + enemy.x * MINIMAP_TILE_SIZE
                 ey = offset_y + enemy.y * MINIMAP_TILE_SIZE
-                pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 3)
+                # Boss is groter en anders gekleurd
+                if hasattr(enemy, 'is_boss'):
+                    pygame.draw.circle(self.screen, (255, 100, 0), (int(ex), int(ey)), 5)
+                else:
+                    pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 2)
                     
         # Teken speler
         player_x = offset_x + self.player.x * MINIMAP_TILE_SIZE
@@ -257,6 +272,33 @@ class Game:
             f"Enemies: {self.enemy_manager.alive_count}", True, (200, 100, 100))
         self.screen.blit(enemies_text, (20, 110))
         
+        # Boss health bar (als boss nog leeft en geactiveerd is)
+        if self.enemy_manager.boss_alive:
+            boss = self.enemy_manager.boss
+            if boss.is_activated:
+                # Boss health bar bovenaan scherm
+                boss_bar_width = 400
+                boss_bar_height = 25
+                boss_bar_x = HALF_WIDTH - boss_bar_width // 2
+                boss_bar_y = 10
+                
+                # Background
+                pygame.draw.rect(self.screen, (40, 10, 10), 
+                                (boss_bar_x, boss_bar_y, boss_bar_width, boss_bar_height))
+                # Health
+                boss_fill = (boss.health / boss.max_health) * boss_bar_width
+                boss_color = (200, 50, 50) if not boss.rage_mode else (255, 100, 0)
+                pygame.draw.rect(self.screen, boss_color,
+                                (boss_bar_x, boss_bar_y, boss_fill, boss_bar_height))
+                # Border
+                pygame.draw.rect(self.screen, (150, 50, 50),
+                                (boss_bar_x, boss_bar_y, boss_bar_width, boss_bar_height), 3)
+                # Text
+                boss_name = "DEMON LORD" if not boss.rage_mode else "DEMON LORD [ENRAGED]"
+                boss_text = self.font.render(boss_name, True, (255, 200, 200))
+                boss_text_rect = boss_text.get_rect(center=(HALF_WIDTH, boss_bar_y + boss_bar_height // 2))
+                self.screen.blit(boss_text, boss_text_rect)
+        
         # FPS
         fps = int(self.clock.get_fps())
         fps_text = self.small_font.render(f"FPS: {fps}", True, (0, 255, 0))
@@ -296,8 +338,8 @@ class Game:
             self.screen.blit(kill_surf, kill_rect)
             
         # Controls hint
-        hint_text = self.small_font.render("[MOUSE] Look  [1/2] Weapon  [SPACE] Shoot  [E] Door", True, (120, 120, 120))
-        self.screen.blit(hint_text, (WIDTH - 380, HEIGHT - 25))
+        hint_text = self.small_font.render("[MOUSE] Look  [1/2/3] Weapon  [SPACE] Shoot  [E] Door", True, (120, 120, 120))
+        self.screen.blit(hint_text, (WIDTH - 400, HEIGHT - 25))
         
     def draw_damage_flash(self):
         """Teken rood flash als speler geraakt wordt"""
@@ -383,8 +425,8 @@ class Game:
         print("  S/DOWN      - Achteruit")
         print("  A/D         - Strafe links/rechts")
         print("  MUIS        - Rondkijken")
-        print("  SPACE/CLICK - Schieten")
-        print("  1/2/Q       - Wissel wapen")
+        print("  SPACE/CLICK - Schieten (houd ingedrukt voor machinegun)")
+        print("  1/2/3/Q     - Wissel wapen (Pistol/MachineGun/Shotgun)")
         print("  E           - Open/sluit deur")
         print("  M           - Minimap toggle")
         print("  ESC         - Afsluiten")

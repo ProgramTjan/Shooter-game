@@ -88,7 +88,7 @@ class Player:
     def can_move_to(self, x, y):
         """Check of speler naar positie kan bewegen"""
         # Check muren
-        if is_wall(x, y):
+d    if is_wall(x, y):
             return False
             
         # Check deuren

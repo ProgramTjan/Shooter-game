@@ -9,7 +9,7 @@ HALF_HEIGHT = HEIGHT // 2
 FPS = 60
 
 # Speler instellingen
-PLAYER_POS = (2.5, 2.5)  # Start positie
+PLAYER_POS = (2.5, 1.5)  # Start positie (linksboven)
 PLAYER_ANGLE = 0
 PLAYER_SPEED = 0.004
 PLAYER_ROT_SPEED = 0.002

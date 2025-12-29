@@ -6,10 +6,12 @@ import math
 from settings import *
 
 
-def create_enemy_sprite(color_scheme='red'):
+def create_enemy_sprite(color_scheme='red', size=64):
     """Maak een demon/vijand sprite met verschillende kleuren"""
-    size = 64  # Kleiner formaat
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+    
+    # Schaal factor
+    s = size / 64
     
     # Kleur schemes
     colors = {
@@ -18,42 +20,113 @@ def create_enemy_sprite(color_scheme='red'):
         'blue': {'body': (40, 40, 180), 'head': (50, 50, 200), 'horn': (30, 30, 100), 'arm': (35, 35, 160)},
         'purple': {'body': (140, 40, 140), 'head': (160, 50, 160), 'horn': (80, 30, 80), 'arm': (120, 35, 120)},
         'orange': {'body': (200, 100, 30), 'head': (220, 120, 40), 'horn': (120, 60, 20), 'arm': (180, 90, 25)},
+        'boss': {'body': (80, 20, 20), 'head': (100, 25, 25), 'horn': (50, 10, 10), 'arm': (70, 18, 18)},
     }
     
     c = colors.get(color_scheme, colors['red'])
     
     # Lichaam
-    pygame.draw.ellipse(sprite, c['body'], (10, 18, 44, 42))
+    pygame.draw.ellipse(sprite, c['body'], (int(10*s), int(18*s), int(44*s), int(42*s)))
     
     # Hoofd
-    pygame.draw.circle(sprite, c['head'], (32, 18), 14)
+    pygame.draw.circle(sprite, c['head'], (int(32*s), int(18*s)), int(14*s))
     
     # Hoorns
-    pygame.draw.polygon(sprite, c['horn'], [(20, 10), (18, 0), (25, 8)])
-    pygame.draw.polygon(sprite, c['horn'], [(44, 10), (46, 0), (39, 8)])
+    pygame.draw.polygon(sprite, c['horn'], [(int(20*s), int(10*s)), (int(18*s), 0), (int(25*s), int(8*s))])
+    pygame.draw.polygon(sprite, c['horn'], [(int(44*s), int(10*s)), (int(46*s), 0), (int(39*s), int(8*s))])
     
     # Ogen (gloeiend)
-    pygame.draw.circle(sprite, (255, 255, 0), (26, 16), 4)
-    pygame.draw.circle(sprite, (255, 255, 0), (38, 16), 4)
-    pygame.draw.circle(sprite, (0, 0, 0), (27, 16), 2)
-    pygame.draw.circle(sprite, (0, 0, 0), (39, 16), 2)
+    eye_color = (255, 0, 0) if color_scheme == 'boss' else (255, 255, 0)
+    pygame.draw.circle(sprite, eye_color, (int(26*s), int(16*s)), int(4*s))
+    pygame.draw.circle(sprite, eye_color, (int(38*s), int(16*s)), int(4*s))
+    pygame.draw.circle(sprite, (0, 0, 0), (int(27*s), int(16*s)), int(2*s))
+    pygame.draw.circle(sprite, (0, 0, 0), (int(39*s), int(16*s)), int(2*s))
     
     # Mond
-    pygame.draw.ellipse(sprite, (50, 0, 0), (24, 24, 16, 6))
+    pygame.draw.ellipse(sprite, (50, 0, 0), (int(24*s), int(24*s), int(16*s), int(6*s)))
     # Tanden
     for i in range(3):
-        x = 26 + i * 5
-        pygame.draw.polygon(sprite, (255, 255, 255), [(x, 24), (x + 3, 24), (x + 1, 28)])
+        x = int((26 + i * 5) * s)
+        pygame.draw.polygon(sprite, (255, 255, 255), [(x, int(24*s)), (x + int(3*s), int(24*s)), (x + int(1*s), int(28*s))])
     
     # Armen
-    pygame.draw.ellipse(sprite, c['arm'], (2, 28, 12, 22))
-    pygame.draw.ellipse(sprite, c['arm'], (50, 28, 12, 22))
+    pygame.draw.ellipse(sprite, c['arm'], (int(2*s), int(28*s), int(12*s), int(22*s)))
+    pygame.draw.ellipse(sprite, c['arm'], (int(50*s), int(28*s), int(12*s), int(22*s)))
     
     # Klauwen
     claw_color = (50, 20, 20)
     for i in range(2):
-        pygame.draw.line(sprite, claw_color, (5 + i*4, 48), (3 + i*4, 58), 2)
-        pygame.draw.line(sprite, claw_color, (55 + i*4, 48), (57 + i*4, 58), 2)
+        pygame.draw.line(sprite, claw_color, (int((5 + i*4)*s), int(48*s)), (int((3 + i*4)*s), int(58*s)), max(1, int(2*s)))
+        pygame.draw.line(sprite, claw_color, (int((55 + i*4)*s), int(48*s)), (int((57 + i*4)*s), int(58*s)), max(1, int(2*s)))
+    
+    return sprite
+
+
+def create_boss_sprite():
+    """Maak een grote boss sprite"""
+    size = 128  # Dubbel zo groot
+    sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+    
+    s = size / 64  # Schaal factor
+    
+    # Donkere kleuren voor boss
+    body_color = (100, 20, 20)
+    head_color = (120, 25, 25)
+    horn_color = (60, 15, 15)
+    
+    # Lichaam (groter en breder)
+    pygame.draw.ellipse(sprite, body_color, (int(8*s), int(20*s), int(48*s), int(40*s)))
+    
+    # Hoofd
+    pygame.draw.circle(sprite, head_color, (int(32*s), int(20*s)), int(16*s))
+    
+    # Grote hoorns
+    pygame.draw.polygon(sprite, horn_color, [(int(18*s), int(10*s)), (int(12*s), 0), (int(24*s), int(6*s))])
+    pygame.draw.polygon(sprite, horn_color, [(int(46*s), int(10*s)), (int(52*s), 0), (int(40*s), int(6*s))])
+    # Extra hoorns
+    pygame.draw.polygon(sprite, horn_color, [(int(24*s), int(6*s)), (int(20*s), int(-5*s)), (int(28*s), int(4*s))])
+    pygame.draw.polygon(sprite, horn_color, [(int(40*s), int(6*s)), (int(44*s), int(-5*s)), (int(36*s), int(4*s))])
+    
+    # Gloeiende rode ogen
+    pygame.draw.circle(sprite, (255, 50, 50), (int(24*s), int(18*s)), int(5*s))
+    pygame.draw.circle(sprite, (255, 50, 50), (int(40*s), int(18*s)), int(5*s))
+    pygame.draw.circle(sprite, (255, 200, 50), (int(24*s), int(18*s)), int(3*s))
+    pygame.draw.circle(sprite, (255, 200, 50), (int(40*s), int(18*s)), int(3*s))
+    pygame.draw.circle(sprite, (0, 0, 0), (int(25*s), int(18*s)), int(2*s))
+    pygame.draw.circle(sprite, (0, 0, 0), (int(41*s), int(18*s)), int(2*s))
+    
+    # Grote mond met veel tanden
+    pygame.draw.ellipse(sprite, (30, 0, 0), (int(20*s), int(28*s), int(24*s), int(10*s)))
+    for i in range(5):
+        x = int((22 + i * 4) * s)
+        pygame.draw.polygon(sprite, (255, 255, 255), 
+                          [(x, int(28*s)), (x + int(3*s), int(28*s)), (x + int(1*s), int(35*s))])
+    
+    # Grote armen met spikes
+    pygame.draw.ellipse(sprite, (90, 18, 18), (0, int(25*s), int(16*s), int(28*s)))
+    pygame.draw.ellipse(sprite, (90, 18, 18), (int(48*s), int(25*s), int(16*s), int(28*s)))
+    
+    # Spike details op armen
+    spike_color = (60, 15, 15)
+    pygame.draw.polygon(sprite, spike_color, [(int(4*s), int(30*s)), (int(-2*s), int(35*s)), (int(6*s), int(38*s))])
+    pygame.draw.polygon(sprite, spike_color, [(int(60*s), int(30*s)), (int(66*s), int(35*s)), (int(58*s), int(38*s))])
+    
+    # Grote klauwen
+    for i in range(3):
+        pygame.draw.line(sprite, (40, 10, 10), 
+                        (int((4 + i*5)*s), int(52*s)), 
+                        (int((1 + i*5)*s), int(62*s)), int(3*s))
+        pygame.draw.line(sprite, (40, 10, 10), 
+                        (int((52 + i*5)*s), int(52*s)), 
+                        (int((55 + i*5)*s), int(62*s)), int(3*s))
+    
+    # Gloeiende aura effect
+    for r in range(3):
+        alpha = 30 - r * 10
+        glow = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (255, 50, 0, alpha), 
+                           (int((6-r*2)*s), int((18-r*2)*s), int((52+r*4)*s), int((44+r*4)*s)))
+        sprite.blit(glow, (0, 0))
     
     return sprite
 
@@ -63,23 +136,19 @@ def create_dead_enemy_sprite(color_scheme='red'):
     size = 64
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
-    # Kleur gebaseerd op scheme
     colors = {
         'red': (100, 30, 30),
         'green': (30, 80, 30),
         'blue': (30, 30, 100),
         'purple': (80, 30, 80),
         'orange': (120, 60, 20),
+        'boss': (60, 15, 15),
     }
     body_color = colors.get(color_scheme, (100, 30, 30))
     
-    # Bloedplas
     pygame.draw.ellipse(sprite, (100, 20, 20), (5, 45, 54, 18))
-    
-    # Lichaam (plat)
     pygame.draw.ellipse(sprite, body_color, (10, 40, 44, 16))
     
-    # X ogen
     for ex in [22, 38]:
         pygame.draw.line(sprite, (40, 40, 40), (ex-3, 45), (ex+3, 51), 2)
         pygame.draw.line(sprite, (40, 40, 40), (ex+3, 45), (ex-3, 51), 2)
@@ -87,18 +156,38 @@ def create_dead_enemy_sprite(color_scheme='red'):
     return sprite
 
 
-def create_hurt_enemy_sprite():
-    """Maak een gewonde vijand sprite (wit flash)"""
-    size = 64
+def create_dead_boss_sprite():
+    """Maak een dode boss sprite"""
+    size = 128
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
+    # Grote bloedplas
+    pygame.draw.ellipse(sprite, (80, 15, 15), (10, 80, 108, 40))
+    pygame.draw.ellipse(sprite, (60, 12, 12), (20, 75, 88, 35))
+    
+    # Lichaam
+    pygame.draw.ellipse(sprite, (50, 10, 10), (20, 70, 88, 30))
+    
+    # X ogen
+    for ex in [44, 74]:
+        pygame.draw.line(sprite, (30, 30, 30), (ex-6, 78), (ex+6, 90), 3)
+        pygame.draw.line(sprite, (30, 30, 30), (ex+6, 78), (ex-6, 90), 3)
+    
+    return sprite
+
+
+def create_hurt_enemy_sprite(size=64):
+    """Maak een gewonde vijand sprite (wit flash)"""
+    sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+    s = size / 64
+    
     white = (255, 255, 255)
-    pygame.draw.ellipse(sprite, white, (10, 18, 44, 42))
-    pygame.draw.circle(sprite, white, (32, 18), 14)
-    pygame.draw.polygon(sprite, white, [(20, 10), (18, 0), (25, 8)])
-    pygame.draw.polygon(sprite, white, [(44, 10), (46, 0), (39, 8)])
-    pygame.draw.ellipse(sprite, white, (2, 28, 12, 22))
-    pygame.draw.ellipse(sprite, white, (50, 28, 12, 22))
+    pygame.draw.ellipse(sprite, white, (int(10*s), int(18*s), int(44*s), int(42*s)))
+    pygame.draw.circle(sprite, white, (int(32*s), int(18*s)), int(14*s))
+    pygame.draw.polygon(sprite, white, [(int(20*s), int(10*s)), (int(18*s), 0), (int(25*s), int(8*s))])
+    pygame.draw.polygon(sprite, white, [(int(44*s), int(10*s)), (int(46*s), 0), (int(39*s), int(8*s))])
+    pygame.draw.ellipse(sprite, white, (int(2*s), int(28*s), int(12*s), int(22*s)))
+    pygame.draw.ellipse(sprite, white, (int(50*s), int(28*s), int(12*s), int(22*s)))
     
     return sprite
 
@@ -154,7 +243,7 @@ class SpriteRenderer:
                 'distance': distance,
                 'delta_angle': delta_angle,
                 'scale': sprite['scale'],
-                'pitch': player.pitch  # Voeg pitch toe
+                'pitch': player.pitch
             })
             
         sprite_data.sort(key=lambda s: s['distance'], reverse=True)
@@ -187,10 +276,8 @@ class SpriteRenderer:
                 return
                 
             x = screen_x - sprite_width / 2
-            # Y positie aangepast voor pitch
             y = HALF_HEIGHT + pitch - sprite_height / 2
             
-            # Depth check per kolom voor betere occlusie
             sprite_left = int(max(0, x))
             sprite_right = int(min(WIDTH, x + sprite_width))
             
@@ -199,13 +286,11 @@ class SpriteRenderer:
                 if 0 <= ray_idx < len(raycaster.ray_results):
                     wall_depth = raycaster.ray_results[ray_idx]['depth']
                     if distance < wall_depth:
-                        # Render deze kolom van de sprite
                         src_x = int((col - x) / sprite_width * surface.get_width())
                         src_x = max(0, min(surface.get_width() - 1, src_x))
                         
                         col_surface = scaled.subsurface((int(col - x), 0, 1, int(sprite_height)))
                         
-                        # Fog effect
                         fog_factor = min(1, distance / MAX_DEPTH)
                         if fog_factor > 0.1:
                             fog_surf = pygame.Surface((1, int(sprite_height)), pygame.SRCALPHA)
