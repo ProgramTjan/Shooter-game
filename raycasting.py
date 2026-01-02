@@ -36,7 +36,8 @@ class RayCaster:
             cos_a = math.cos(ray_angle)
             
             # Cast ray en krijg resultaat
-            depth, wall_type, tex_offset, is_vertical, is_door = self.cast_ray(ox, oy, sin_a, cos_a)
+            # Volgorde: depth, wall_type, tex_offset, is_door, is_vertical
+            depth, wall_type, tex_offset, is_door, is_vertical = self.cast_ray(ox, oy, sin_a, cos_a)
             
             # Fix fisheye effect
             depth *= math.cos(player.angle - ray_angle)
