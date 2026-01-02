@@ -205,6 +205,151 @@ def create_tech_texture(base_color):
     return texture
 
 
+def create_tapestry_texture():
+    """Maak een wandkleed/tapestry textuur met demonisch patroon"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    # Donkerrode stof achtergrond
+    base_color = (80, 25, 30)
+    texture.fill(base_color)
+    
+    # Stof textuur effect
+    import random
+    random.seed(123)
+    for _ in range(800):
+        x = random.randint(0, TEXTURE_SIZE - 1)
+        y = random.randint(0, TEXTURE_SIZE - 1)
+        variation = random.randint(-15, 15)
+        color = tuple(max(0, min(255, c + variation)) for c in base_color)
+        texture.set_at((x, y), color)
+    
+    # Gouden rand/frame
+    gold = (180, 140, 60)
+    gold_dark = (120, 90, 40)
+    border_width = 16
+    
+    # Buitenste rand
+    pygame.draw.rect(texture, gold_dark, (0, 0, TEXTURE_SIZE, TEXTURE_SIZE), border_width + 4)
+    pygame.draw.rect(texture, gold, (4, 4, TEXTURE_SIZE - 8, TEXTURE_SIZE - 8), border_width)
+    
+    # Binnenste decoratieve rand
+    inner_border = 30
+    pygame.draw.rect(texture, gold_dark, (inner_border, inner_border, 
+                     TEXTURE_SIZE - inner_border*2, TEXTURE_SIZE - inner_border*2), 3)
+    
+    # Centraal demonisch symbool
+    center_x, center_y = TEXTURE_SIZE // 2, TEXTURE_SIZE // 2
+    symbol_color = (150, 50, 50)
+    symbol_glow = (200, 80, 80)
+    
+    # Pentagram-achtige vorm
+    import math
+    points = []
+    outer_radius = 70
+    inner_radius = 35
+    for i in range(5):
+        # Buitenste punt
+        angle = math.radians(-90 + i * 72)
+        points.append((center_x + outer_radius * math.cos(angle),
+                      center_y + outer_radius * math.sin(angle)))
+        # Binnenste punt
+        angle = math.radians(-90 + i * 72 + 36)
+        points.append((center_x + inner_radius * math.cos(angle),
+                      center_y + inner_radius * math.sin(angle)))
+    
+    # Teken ster met glow
+    pygame.draw.polygon(texture, symbol_glow, points)
+    pygame.draw.polygon(texture, symbol_color, points, 3)
+    
+    # Centrale cirkel
+    pygame.draw.circle(texture, symbol_glow, (center_x, center_y), 25)
+    pygame.draw.circle(texture, (60, 20, 25), (center_x, center_y), 20)
+    pygame.draw.circle(texture, symbol_color, (center_x, center_y), 20, 2)
+    
+    # Oog in het midden
+    pygame.draw.ellipse(texture, (200, 180, 50), (center_x - 12, center_y - 6, 24, 12))
+    pygame.draw.ellipse(texture, (50, 20, 20), (center_x - 5, center_y - 4, 10, 8))
+    
+    # Decoratieve hoek ornamenten
+    ornament_color = (160, 120, 50)
+    corner_offset = 45
+    ornament_size = 20
+    
+    corners = [(corner_offset, corner_offset), 
+               (TEXTURE_SIZE - corner_offset, corner_offset),
+               (corner_offset, TEXTURE_SIZE - corner_offset),
+               (TEXTURE_SIZE - corner_offset, TEXTURE_SIZE - corner_offset)]
+    
+    for cx, cy in corners:
+        # Klein symbool in elke hoek
+        pygame.draw.circle(texture, ornament_color, (cx, cy), ornament_size, 2)
+        pygame.draw.line(texture, ornament_color, (cx - 8, cy), (cx + 8, cy), 2)
+        pygame.draw.line(texture, ornament_color, (cx, cy - 8), (cx, cy + 8), 2)
+    
+    # Verticale decoratieve lijnen aan zijkanten
+    line_color = (140, 100, 45)
+    for y_pos in [60, 100, 156, 196]:
+        pygame.draw.line(texture, line_color, (40, y_pos), (55, y_pos), 2)
+        pygame.draw.line(texture, line_color, (TEXTURE_SIZE - 55, y_pos), (TEXTURE_SIZE - 40, y_pos), 2)
+    
+    return texture
+
+
+def create_torch_wall_texture():
+    """Maak een muur textuur met een fakkel/toorts"""
+    # Start met basis bakstenen
+    texture = create_brick_texture((130, 45, 45))
+    
+    # Fakkel houder
+    holder_color = (60, 50, 40)
+    holder_x = TEXTURE_SIZE // 2
+    holder_y = TEXTURE_SIZE // 2 + 20
+    
+    # Metalen houder
+    pygame.draw.rect(texture, holder_color, (holder_x - 8, holder_y - 10, 16, 50))
+    pygame.draw.rect(texture, (80, 70, 55), (holder_x - 8, holder_y - 10, 16, 50), 2)
+    
+    # Houten stok
+    wood_color = (90, 60, 35)
+    pygame.draw.rect(texture, wood_color, (holder_x - 5, holder_y - 60, 10, 70))
+    pygame.draw.rect(texture, (110, 75, 45), (holder_x - 5, holder_y - 60, 10, 70), 1)
+    
+    # Vlam
+    flame_colors = [(255, 200, 50), (255, 150, 30), (255, 100, 20), (200, 60, 20)]
+    flame_y = holder_y - 65
+    
+    # Glow achter vlam
+    for r in range(4, 0, -1):
+        glow_alpha = 40 - r * 8
+        glow_surf = pygame.Surface((60, 60), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (255, 150, 50, glow_alpha), (30, 40), 15 + r * 5)
+        texture.blit(glow_surf, (holder_x - 30, flame_y - 30))
+    
+    # Vlam vorm
+    flame_points = [
+        (holder_x, flame_y - 35),      # Top
+        (holder_x + 12, flame_y - 10),  # Rechts boven
+        (holder_x + 8, flame_y + 5),    # Rechts onder
+        (holder_x, flame_y + 10),       # Onder
+        (holder_x - 8, flame_y + 5),    # Links onder
+        (holder_x - 12, flame_y - 10),  # Links boven
+    ]
+    pygame.draw.polygon(texture, flame_colors[2], flame_points)
+    
+    # Binnenste vlam
+    inner_points = [
+        (holder_x, flame_y - 25),
+        (holder_x + 6, flame_y - 8),
+        (holder_x + 4, flame_y + 2),
+        (holder_x, flame_y + 5),
+        (holder_x - 4, flame_y + 2),
+        (holder_x - 6, flame_y - 8),
+    ]
+    pygame.draw.polygon(texture, flame_colors[0], inner_points)
+    
+    return texture
+
+
 class TextureManager:
     """Beheert alle texturen in de game"""
     
@@ -214,13 +359,21 @@ class TextureManager:
         
     def load_textures(self):
         """Laad/genereer alle texturen"""
-        # Alle muren gebruiken rode bakstenen textuur
+        # Standaard rode bakstenen
         brick_texture = create_brick_texture((150, 50, 50))
         self.textures[1] = brick_texture
-        self.textures[2] = brick_texture
-        self.textures[3] = brick_texture
-        self.textures[4] = brick_texture
-        self.textures[5] = brick_texture
+        
+        # Wandkleed/tapestry muur
+        self.textures[2] = create_tapestry_texture()
+        
+        # Fakkel muur
+        self.textures[3] = create_torch_wall_texture()
+        
+        # Donkere stenen muur
+        self.textures[4] = create_stone_texture((70, 65, 60))
+        
+        # Metalen muur
+        self.textures[5] = create_metal_texture((80, 85, 90))
         
         # Deur textuur (smaller, met bakstenen aan zijkanten)
         self.textures['door'] = create_door_texture()

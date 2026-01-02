@@ -1,9 +1,14 @@
 # Game Settings
 import math
+import pygame
 
-# Scherm instellingen
-WIDTH = 1280
-HEIGHT = 720
+# Initialiseer pygame om scherminfo te krijgen
+pygame.init()
+_display_info = pygame.display.Info()
+
+# Scherm instellingen (automatische fullscreen resolutie)
+WIDTH = _display_info.current_w
+HEIGHT = _display_info.current_h
 HALF_WIDTH = WIDTH // 2
 HALF_HEIGHT = HEIGHT // 2
 FPS = 60
@@ -39,11 +44,11 @@ CEILING_COLOR = (30, 30, 50)
 
 # Muur kleuren per type (voor minimap en fallback)
 WALL_COLORS = {
-    1: (150, 50, 50),    # Rode bakstenen (standaard)
-    2: (150, 50, 50),    # Rode bakstenen
-    3: (150, 50, 50),    # Rode bakstenen
-    4: (150, 50, 50),    # Rode bakstenen
-    5: (150, 50, 50),    # Rode bakstenen
-    9: (180, 120, 80),   # Deur kleur (voor minimap)
+    1: (150, 50, 50),    # Rode bakstenen
+    2: (120, 40, 60),    # Wandkleed (donkerrood)
+    3: (180, 120, 60),   # Fakkel muur (warm)
+    4: (70, 65, 60),     # Donkere steen
+    5: (80, 85, 90),     # Metaal
+    9: (180, 120, 80),   # Deur kleur
 }
 

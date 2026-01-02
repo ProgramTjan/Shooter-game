@@ -188,54 +188,77 @@ class Boss(Enemy):
 class EnemyManager:
     """Beheert alle vijanden inclusief de boss"""
     
-    def __init__(self):
+    def __init__(self, level=1):
         self.enemies = []
         self.boss = None
         self.boss_spawned = False
+        self.level = level
         self.spawn_enemies()
         
     def spawn_enemies(self):
         """Spawn vijanden verspreid over het level"""
-        # Vijand spawn posities per kamer/gebied
+        if self.level == 1:
+            self._spawn_level1_enemies()
+        elif self.level == 2:
+            self._spawn_boss_level()
+            
+    def _spawn_level1_enemies(self):
+        """Level 1: Normale vijanden, geen boss"""
         spawn_positions = [
-            # Start gebied (makkelijk)
-            (3.5, 2.5),
+            # Noordelijke kamers
+            (2.5, 2.5),
+            (21.5, 2.5),
             
-            # Linker kamers
-            (2.5, 7.5),
-            (4.5, 8.5),
-            (2.5, 15.5),
-            (4.5, 16.5),
-            (3.5, 21.5),
+            # Smalle gangen (gevaarlijk!)
+            (7.5, 8.5),
+            (16.5, 8.5),
+            (7.5, 15.5),
+            (16.5, 15.5),
             
-            # Rechter kamers
-            (20.5, 2.5),
-            (21.5, 7.5),
-            (19.5, 8.5),
-            (21.5, 15.5),
-            (20.5, 20.5),
-            (22.5, 21.5),
+            # Centrale arena
+            (11.5, 10.5),
+            (12.5, 13.5),
             
-            # Centrale gang
-            (11.5, 7.5),
-            (11.5, 16.5),
+            # Donkere stenen kamer (noordoost)
+            (11.5, 2.5),
+            (12.5, 4.5),
             
-            # Centrale kamers
-            (11.5, 11.5),
-            (12.5, 12.5),
+            # Metalen kamer (zuidoost)  
+            (11.5, 17.5),
+            (12.5, 20.5),
             
-            # Hoeken
-            (7.5, 2.5),
-            (15.5, 2.5),
-            (7.5, 21.5),
-            (15.5, 21.5),
+            # Wandkleed kamers
+            (2.5, 6.5),
+            (21.5, 17.5),
+            
+            # Zuid kamers
+            (2.5, 20.5),
+            (21.5, 20.5),
         ]
         
         for i, (x, y) in enumerate(spawn_positions):
             enemy_type = Enemy.ENEMY_TYPES[i % len(Enemy.ENEMY_TYPES)]
             self.enemies.append(Enemy(x, y, enemy_type))
             
-        # Spawn de boss in het midden van het level
+    def _spawn_boss_level(self):
+        """Level 2: Boss arena met de Demon Lord en elite guards"""
+        # Elite guards rondom de boss
+        guard_positions = [
+            (8.5, 8.5),
+            (14.5, 8.5),
+            (8.5, 14.5),
+            (14.5, 14.5),
+            (11.5, 6.5),
+            (11.5, 16.5),
+        ]
+        
+        # Spawn sterke vijanden als guards
+        for i, (x, y) in enumerate(guard_positions):
+            # Afwisselen tussen purple (sterk) en orange (snel)
+            enemy_type = Enemy.ENEMY_TYPES[3 if i % 2 == 0 else 4]
+            self.enemies.append(Enemy(x, y, enemy_type))
+            
+        # Spawn de boss in het midden
         self.boss = Boss(11.5, 11.5)
         self.enemies.append(self.boss)
         

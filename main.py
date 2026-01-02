@@ -26,6 +26,7 @@ from sprites import SpriteRenderer
 from enemy import EnemyManager
 from weapon import WeaponManager
 from map import MAP, MINIMAP_TILE_SIZE
+from quest import QuestManager
 
 
 class Game:
@@ -34,12 +35,18 @@ class Game:
         pygame.mouse.set_visible(False)
         pygame.event.set_grab(True)  # Vang de muis
         
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
         pygame.display.set_caption("DOOMIE - A DOOM-like Game")
         
         self.clock = pygame.time.Clock()
         self.running = True
         self.show_minimap = True
+        
+        # Level systeem
+        self.current_level = 1
+        self.transitioning = False
+        self.transition_time = 0
+        self.transition_duration = 3000  # 3 seconden transitie
         
         # Texture manager
         print("Loading textures...")
@@ -62,17 +69,22 @@ class Game:
         # Sprite renderer
         self.sprite_renderer = SpriteRenderer(self)
         
-        # Vijanden
-        self.enemy_manager = EnemyManager()
-        print(f"Spawned {len(self.enemy_manager.enemies)} enemies")
+        # Vijanden (level 1 = geen boss)
+        self.enemy_manager = EnemyManager(level=1)
+        print(f"Level 1: Spawned {len(self.enemy_manager.enemies)} enemies")
         
         # Wapens
         self.weapons = WeaponManager()
+        
+        # Quest systeem
+        self.quest = QuestManager()
+        print(f"Quest: Collect {self.quest.total_crystals} Demonic Crystals!")
         
         # Font voor HUD
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
         self.big_font = pygame.font.Font(None, 72)
+        self.title_font = pygame.font.Font(None, 96)
         
         # Feedback
         self.hit_marker_time = 0
@@ -84,8 +96,9 @@ class Game:
         self.game_over = False
         self.victory = False
         
-        # Centreer muis
+        # Centreer muis en reset relatieve beweging
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
+        pygame.mouse.get_rel()  # Reset de relatieve beweging buffer
         
     def handle_events(self):
         """Verwerk input events"""
@@ -115,7 +128,7 @@ class Game:
                     
     def shoot(self):
         """Schiet met wapen"""
-        if self.game_over or self.victory:
+        if self.game_over or self.victory or self.transitioning:
             return
             
         if self.weapons.fire():
@@ -135,13 +148,13 @@ class Game:
                 if killed:
                     # Speciale tekst voor boss kill
                     if hasattr(enemy, 'is_boss'):
-                        self.kill_text = "BOSS DEFEATED!"
+                        self.kill_text = "DEMON LORD DEFEATED!"
                     else:
                         self.kill_text = "ENEMY KILLED!"
                     self.kill_text_time = pygame.time.get_ticks()
                     
-                    # Check victory
-                    if self.enemy_manager.alive_count == 0:
+                    # Check victory - alleen in level 2 als boss verslagen
+                    if self.current_level == 2 and self.enemy_manager.alive_count == 0:
                         self.victory = True
                     
     def update(self, dt):
@@ -149,9 +162,23 @@ class Game:
         if self.game_over or self.victory:
             return
             
-        # Muis beweging
+        # Check level transitie
+        if self.transitioning:
+            current_time = pygame.time.get_ticks()
+            if current_time - self.transition_time > self.transition_duration:
+                self.start_boss_level()
+            return
+            
+        # Check of quest compleet is en start transitie
+        if self.current_level == 1 and self.quest.quest_complete and not self.transitioning:
+            self.transitioning = True
+            self.transition_time = pygame.time.get_ticks()
+            return
+            
+        # Muis beweging - warp muis terug naar centrum voor oneindige rotatie
         mouse_rel = pygame.mouse.get_rel()
         self.player.handle_mouse(mouse_rel)
+        pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
             
         # Speler beweging
         keys = pygame.key.get_pressed()
@@ -163,6 +190,10 @@ class Game:
         self.enemy_manager.update(dt, self.player, self.door_manager)
         self.weapons.update(dt, is_moving)
         self.raycaster.raycast(self.player)
+        
+        # Update quest (alleen in level 1)
+        if self.current_level == 1:
+            self.quest.update(dt, self.player, self.enemy_manager)
         
         # Automatisch vuur (houd muis/spatie ingedrukt)
         mouse_buttons = pygame.mouse.get_pressed()
@@ -178,6 +209,79 @@ class Game:
             if self.player_health <= 0:
                 self.player_health = 0
                 self.game_over = True
+                
+    def start_boss_level(self):
+        """Start level 2: Boss Arena"""
+        self.current_level = 2
+        self.transitioning = False
+        
+        # Reset player positie naar centrum
+        self.player.x = 2.5
+        self.player.y = 2.5
+        self.player.angle = 0.8  # Kijk richting centrum
+        
+        # Geef health bonus voor het voltooien van de quest
+        health_bonus = 50
+        self.player_health = min(self.player_max_health, self.player_health + health_bonus)
+        
+        # Spawn boss level vijanden
+        self.enemy_manager = EnemyManager(level=2)
+        
+        # Reset doors
+        self.door_manager = DoorManager(MAP)
+        self.player.set_door_manager(self.door_manager)
+        self.raycaster.set_door_manager(self.door_manager)
+        
+        # Reset muis
+        pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
+        pygame.mouse.get_rel()
+        
+        print("\n" + "="*50)
+        print("  LEVEL 2: BOSS ARENA")
+        print("  Defeat the DEMON LORD!")
+        print("="*50 + "\n")
+        
+    def draw_transition(self):
+        """Teken level transitie scherm"""
+        # Donkere overlay
+        overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        
+        # Pulserende achtergrond
+        current_time = pygame.time.get_ticks()
+        pulse = (math.sin(current_time * 0.005) + 1) * 0.5
+        overlay.fill((20, 0, 40, 230))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Titel
+        title = self.title_font.render("QUEST COMPLETE!", True, (255, 200, 50))
+        title_rect = title.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 100))
+        self.screen.blit(title, title_rect)
+        
+        # Subtitle
+        sub = self.big_font.render("Entering Boss Arena...", True, (200, 100, 255))
+        sub_rect = sub.get_rect(center=(HALF_WIDTH, HALF_HEIGHT))
+        self.screen.blit(sub, sub_rect)
+        
+        # Progress bar
+        elapsed = current_time - self.transition_time
+        progress = min(1.0, elapsed / self.transition_duration)
+        
+        bar_width = 400
+        bar_height = 20
+        bar_x = HALF_WIDTH - bar_width // 2
+        bar_y = HALF_HEIGHT + 80
+        
+        # Background
+        pygame.draw.rect(self.screen, (40, 20, 60), (bar_x, bar_y, bar_width, bar_height))
+        # Fill
+        pygame.draw.rect(self.screen, (180, 80, 255), (bar_x, bar_y, int(bar_width * progress), bar_height))
+        # Border
+        pygame.draw.rect(self.screen, (100, 50, 150), (bar_x, bar_y, bar_width, bar_height), 2)
+        
+        # Hint tekst
+        hint = self.font.render("Prepare for battle!", True, (150, 150, 200))
+        hint_rect = hint.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 140))
+        self.screen.blit(hint, hint_rect)
         
     def draw_minimap(self):
         """Teken minimap in hoek"""
@@ -219,6 +323,9 @@ class Game:
                     pygame.draw.circle(self.screen, (255, 100, 0), (int(ex), int(ey)), 5)
                 else:
                     pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 2)
+                    
+        # Teken crystals op minimap
+        self.quest.draw_minimap_crystals(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
                     
         # Teken speler
         player_x = offset_x + self.player.x * MINIMAP_TILE_SIZE
@@ -371,15 +478,19 @@ class Game:
         self.screen.blit(overlay, (0, 0))
         
         text = self.big_font.render("VICTORY!", True, (50, 255, 50))
-        text_rect = text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 50))
+        text_rect = text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 80))
         self.screen.blit(text, text_rect)
         
-        sub_text = self.font.render("All enemies eliminated!", True, (200, 255, 200))
-        sub_rect = sub_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 20))
+        sub_text = self.font.render("The Demon Lord has been vanquished!", True, (200, 255, 200))
+        sub_rect = sub_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 20))
         self.screen.blit(sub_text, sub_rect)
         
+        sub_text2 = self.font.render("You are the champion!", True, (255, 220, 100))
+        sub_rect2 = sub_text2.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 20))
+        self.screen.blit(sub_text2, sub_rect2)
+        
         exit_text = self.small_font.render("Press ESC to exit", True, (200, 200, 200))
-        exit_rect = exit_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 60))
+        exit_rect = exit_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 70))
         self.screen.blit(exit_text, exit_rect)
         
     def draw(self):
@@ -389,9 +500,11 @@ class Game:
         # Render 3D view
         self.raycaster.render(self.screen)
         
-        # Render sprites (vijanden)
+        # Render sprites (vijanden en crystals)
         self.sprite_renderer.clear()
         self.enemy_manager.render(self.sprite_renderer)
+        if self.current_level == 1:
+            self.quest.render_crystals(self.sprite_renderer)
         self.sprite_renderer.render(self.screen, self.player, self.raycaster)
         
         # Damage flash
@@ -406,6 +519,18 @@ class Game:
             
         # HUD
         self.draw_hud()
+        
+        # Quest HUD (alleen in level 1)
+        if self.current_level == 1:
+            self.quest.draw_hud(self.screen, self.font, self.small_font)
+        else:
+            # Level 2 indicator
+            boss_level_text = self.font.render("LEVEL 2: BOSS ARENA", True, (255, 100, 100))
+            self.screen.blit(boss_level_text, (WIDTH - 250, 40))
+        
+        # Level transitie
+        if self.transitioning:
+            self.draw_transition()
         
         # Game over / Victory
         if self.game_over:
@@ -431,7 +556,9 @@ class Game:
         print("  M           - Minimap toggle")
         print("  ESC         - Afsluiten")
         print("\n" + "="*50)
-        print("\nKill all enemies to win!")
+        print("\n  LEVEL 1: CRYSTAL HUNT")
+        print("  QUEST: Collect all 4 Demonic Crystals!")
+        print("  Complete the quest to unlock the Boss Arena!")
         print("="*50 + "\n")
         
         while self.running:
