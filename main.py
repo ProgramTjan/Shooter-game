@@ -8,10 +8,18 @@ Besturing:
     A/D         - Strafe links/rechts
     MUIS        - Rondkijken (horizontaal + verticaal)
     SPACE/CLICK - Schieten
-    1/2/Q       - Wissel wapen
+    1/2/3/Q     - Wissel wapen
     E           - Open/sluit deur
+    H           - Gebruik Health Pack
     M           - Minimap toggle
     ESC         - Afsluiten
+
+Levels:
+    1. THE DUNGEON - Verzamel de Demonic Crystals
+    2. BOSS ARENA - Versla de Demon Lord
+    3. THE FACTORY - Ontsnap uit de fabriek
+    4. THE INFERNO - Overleef de hel
+    5. THE THRONE ROOM - Finale confrontatie
 """
 
 import pygame
@@ -25,8 +33,9 @@ from door import DoorManager
 from sprites import SpriteRenderer
 from enemy import EnemyManager
 from weapon import WeaponManager
-from map import MAP, MINIMAP_TILE_SIZE
+from map import MINIMAP_TILE_SIZE
 from quest import QuestManager
+from levels import get_level_data, get_total_levels
 
 
 class Game:
@@ -44,41 +53,44 @@ class Game:
         
         # Level systeem
         self.current_level = 1
+        self.total_levels = get_total_levels()
+        self.level_data = None
+        self.current_map = None
         self.transitioning = False
         self.transition_time = 0
         self.transition_duration = 3000  # 3 seconden transitie
         
-        # Texture manager
+        # Story intro systeem
+        self.showing_story = True
+        self.story_lines = []
+        self.story_current_line = 0
+        self.story_current_char = 0
+        self.story_char_timer = 0
+        self.story_char_delay = 40  # ms per karakter (typewriter snelheid)
+        self.story_line_delay = 800  # ms pauze na elke regel
+        self.story_waiting = False
+        self.story_wait_timer = 0
+        self.story_complete = False
+        self.story_skip_requested = False
+        
+        # Texture manager (start met dungeon thema)
         print("Loading textures...")
-        self.textures = TextureManager()
+        self.textures = TextureManager(theme='dungeon')
         
-        # Door manager
-        self.door_manager = DoorManager(MAP)
-        print(f"Found {len(self.door_manager.doors)} doors")
-        
-        # Game objecten
-        self.player = Player()
-        self.player.set_door_manager(self.door_manager)
-        self.player_health = 100
-        self.player_max_health = 100
-        
-        self.raycaster = RayCaster(self)
-        self.raycaster.set_textures(self.textures)
-        self.raycaster.set_door_manager(self.door_manager)
-        
-        # Sprite renderer
-        self.sprite_renderer = SpriteRenderer(self)
-        
-        # Vijanden (level 1 = geen boss)
-        self.enemy_manager = EnemyManager(level=1)
-        print(f"Level 1: Spawned {len(self.enemy_manager.enemies)} enemies")
+        # Laad eerste level (maar start met story)
+        self._load_level(1)
+        self._start_story()
         
         # Wapens
         self.weapons = WeaponManager()
         
-        # Quest systeem
-        self.quest = QuestManager()
-        print(f"Quest: Collect {self.quest.total_crystals} Demonic Crystals!")
+        # Game objecten worden in _load_level gezet
+        self.player_health = 100
+        self.player_max_health = 100
+        
+        # Health pack inventory - speler start met 1
+        self.health_packs_inventory = 1
+        self.health_pack_heal = 35
         
         # Font voor HUD
         self.font = pygame.font.Font(None, 36)
@@ -100,6 +112,267 @@ class Game:
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
         pygame.mouse.get_rel()  # Reset de relatieve beweging buffer
         
+    def _load_level(self, level_num):
+        """Laad een specifiek level"""
+        self.level_data = get_level_data(level_num)
+        if not self.level_data:
+            print(f"Error: Level {level_num} not found!")
+            return
+            
+        self.current_level = level_num
+        self.current_map = self.level_data['map']
+        
+        # Wissel naar juiste thema
+        theme = self.level_data.get('theme', 'dungeon')
+        self.textures.set_theme(theme)
+        
+        # Door manager voor dit level
+        self.door_manager = DoorManager(self.current_map)
+        print(f"\n{'='*50}")
+        print(f"  LEVEL {level_num}: {self.level_data['name']}")
+        print(f"  {self.level_data['subtitle']}")
+        print(f"  Theme: {theme}")
+        print(f"  Found {len(self.door_manager.doors)} doors")
+        print(f"{'='*50}\n")
+        
+        # Player
+        if not hasattr(self, 'player') or self.player is None:
+            self.player = Player()
+        
+        start_pos = self.level_data.get('player_start', (2.5, 2.5))
+        self.player.x = start_pos[0]
+        self.player.y = start_pos[1]
+        self.player.angle = 0.8
+        self.player.set_door_manager(self.door_manager)
+        self.player.set_map(self.current_map)
+        
+        # Raycaster
+        if not hasattr(self, 'raycaster') or self.raycaster is None:
+            self.raycaster = RayCaster(self)
+        self.raycaster.set_textures(self.textures)
+        self.raycaster.set_door_manager(self.door_manager)
+        self.raycaster.set_map(self.current_map)
+        
+        # Sprite renderer
+        if not hasattr(self, 'sprite_renderer') or self.sprite_renderer is None:
+            self.sprite_renderer = SpriteRenderer(self)
+        
+        # Enemies
+        enemy_positions = self.level_data.get('enemy_positions', [])
+        boss_position = self.level_data.get('boss_position', None)
+        has_boss = self.level_data.get('has_boss', False)
+        is_final_boss = self.level_data.get('is_final_boss', False)
+        
+        self.enemy_manager = EnemyManager(
+            level=level_num, 
+            custom_positions=enemy_positions,
+            boss_position=boss_position if has_boss else None,
+            game_map=self.current_map,
+            is_final_boss=is_final_boss
+        )
+        print(f"Spawned {len(self.enemy_manager.enemies)} enemies" + 
+              (" (including BOSS!)" if has_boss else ""))
+        
+        # Quest systeem
+        health_pack_positions = self.level_data.get('health_pack_positions', None)
+        ammo_pack_positions = self.level_data.get('ammo_pack_positions', None)
+        key_position = self.level_data.get('key_position', None)
+        exit_door_position = self.level_data.get('exit_door_position', None)
+        is_boss_level = self.level_data.get('has_boss', False)
+        
+        if self.level_data.get('has_quest', False):
+            crystal_positions = self.level_data.get('crystal_positions', None)
+            self.quest = QuestManager(
+                crystal_positions, health_pack_positions, ammo_pack_positions,
+                key_position, exit_door_position, is_boss_level
+            )
+            print(f"Quest: Collect {self.quest.total_crystals} Crystals + Key!")
+        else:
+            # Boss level - geen crystals/key/exit
+            self.quest = QuestManager(
+                crystal_positions=[], 
+                health_pack_positions=health_pack_positions, 
+                ammo_pack_positions=ammo_pack_positions,
+                is_boss_level=True
+            )
+            
+        # Reset muis
+        pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
+        pygame.mouse.get_rel()
+        
+    def _start_story(self):
+        """Start de story intro voor het huidige level"""
+        self.showing_story = True
+        self.story_complete = False
+        self.story_skip_requested = False
+        self.story_current_line = 0
+        self.story_current_char = 0
+        self.story_char_timer = pygame.time.get_ticks()
+        self.story_waiting = False
+        self.story_wait_timer = 0
+        
+        # Haal story uit level data
+        story = self.level_data.get('story', [])
+        if not story:
+            # Geen story, skip
+            self.showing_story = False
+            return
+            
+        self.story_lines = story
+        
+    def _update_story(self, dt):
+        """Update de typewriter effect"""
+        if not self.showing_story or self.story_complete:
+            return
+            
+        current_time = pygame.time.get_ticks()
+        
+        # Skip check - toon alles direct
+        if self.story_skip_requested:
+            self.story_current_line = len(self.story_lines)
+            self.story_complete = True
+            return
+        
+        # Wachten na een regel?
+        if self.story_waiting:
+            if current_time - self.story_wait_timer > self.story_line_delay:
+                self.story_waiting = False
+                self.story_current_line += 1
+                self.story_current_char = 0
+                self.story_char_timer = current_time
+            return
+            
+        # Alle regels gedaan?
+        if self.story_current_line >= len(self.story_lines):
+            self.story_complete = True
+            return
+            
+        # Huidige regel
+        current_line_text = self.story_lines[self.story_current_line]
+        
+        # Typewriter effect
+        if current_time - self.story_char_timer > self.story_char_delay:
+            self.story_current_char += 1
+            self.story_char_timer = current_time
+            
+            # Regel compleet?
+            if self.story_current_char >= len(current_line_text):
+                self.story_waiting = True
+                self.story_wait_timer = current_time
+                
+    def _draw_story(self):
+        """Teken het story intro scherm"""
+        # Donkere achtergrond
+        self.screen.fill((5, 5, 15))
+        
+        # Sterren effect op achtergrond
+        import random
+        random.seed(42)
+        for _ in range(100):
+            x = random.randint(0, WIDTH)
+            y = random.randint(0, HEIGHT)
+            brightness = random.randint(30, 100)
+            pygame.draw.circle(self.screen, (brightness, brightness, brightness), (x, y), 1)
+        
+        # Level titel bovenaan
+        level_name = self.level_data.get('name', f'LEVEL {self.current_level}')
+        title_color = self._get_theme_color()
+        
+        # Glowing title effect
+        title_surf = self.title_font.render(level_name, True, title_color)
+        title_rect = title_surf.get_rect(center=(HALF_WIDTH, 80))
+        
+        # Glow
+        glow_surf = self.title_font.render(level_name, True, (title_color[0]//3, title_color[1]//3, title_color[2]//3))
+        for offset in [(2, 2), (-2, -2), (2, -2), (-2, 2)]:
+            self.screen.blit(glow_surf, (title_rect.x + offset[0], title_rect.y + offset[1]))
+        self.screen.blit(title_surf, title_rect)
+        
+        # Level nummer
+        level_num_text = self.font.render(f"LEVEL {self.current_level}", True, (150, 150, 150))
+        level_num_rect = level_num_text.get_rect(center=(HALF_WIDTH, 130))
+        self.screen.blit(level_num_text, level_num_rect)
+        
+        # Horizontale lijn
+        pygame.draw.line(self.screen, title_color, (HALF_WIDTH - 200, 160), (HALF_WIDTH + 200, 160), 2)
+        
+        # Story tekst met typewriter effect
+        story_y = 200
+        line_height = 35
+        
+        for i, line in enumerate(self.story_lines):
+            if i < self.story_current_line:
+                # Hele regel tonen
+                text_to_show = line
+                alpha = 255
+            elif i == self.story_current_line and not self.story_complete:
+                # Huidige regel met typewriter
+                text_to_show = line[:self.story_current_char]
+                alpha = 255
+            else:
+                # Nog niet zichtbaar
+                continue
+                
+            if text_to_show:
+                # Speciale kleuren voor bepaalde woorden
+                if any(word in line.upper() for word in ['DEMON', 'BOSS', 'KING', 'LORD', 'FIREBALLS', 'RAGE', 'INFERNO', 'HELL']):
+                    text_color = (255, 100, 100)
+                elif any(word in line.upper() for word in ['CRYSTALS', 'KEY', 'EXIT', 'POWER']):
+                    text_color = (255, 220, 100)
+                elif any(word in line.upper() for word in ['FIGHT', 'DESTROY', 'END THIS']):
+                    text_color = (255, 50, 50)
+                else:
+                    text_color = (200, 200, 220)
+                    
+                text_surf = self.font.render(text_to_show, True, text_color)
+                text_rect = text_surf.get_rect(center=(HALF_WIDTH, story_y + i * line_height))
+                self.screen.blit(text_surf, text_rect)
+        
+        # Objective box onderaan
+        if self.story_complete:
+            obj_text = self.level_data.get('objective', 'Complete the level')
+            
+            # Box
+            box_width = 500
+            box_height = 60
+            box_x = HALF_WIDTH - box_width // 2
+            box_y = HEIGHT - 150
+            
+            pygame.draw.rect(self.screen, (30, 20, 40), (box_x, box_y, box_width, box_height))
+            pygame.draw.rect(self.screen, title_color, (box_x, box_y, box_width, box_height), 3)
+            
+            obj_label = self.small_font.render("OBJECTIVE:", True, (150, 150, 150))
+            self.screen.blit(obj_label, (box_x + 20, box_y + 8))
+            
+            obj_surf = self.font.render(obj_text, True, (255, 255, 100))
+            self.screen.blit(obj_surf, (box_x + 20, box_y + 28))
+        
+        # Instructies onderaan
+        if self.story_complete:
+            hint = "Press SPACE or CLICK to begin"
+            hint_color = (100, 255, 100)
+            # Pulseren
+            pulse = (math.sin(pygame.time.get_ticks() * 0.005) + 1) * 0.5
+            hint_alpha = int(150 + pulse * 105)
+        else:
+            hint = "Press SPACE to skip"
+            hint_color = (150, 150, 150)
+            hint_alpha = 200
+            
+        hint_surf = self.small_font.render(hint, True, hint_color)
+        hint_rect = hint_surf.get_rect(center=(HALF_WIDTH, HEIGHT - 40))
+        self.screen.blit(hint_surf, hint_rect)
+        
+    def _get_theme_color(self):
+        """Haal de thema kleur op"""
+        theme = self.level_data.get('theme', 'dungeon')
+        if theme == 'industrial':
+            return (100, 180, 255)
+        elif theme == 'hell':
+            return (255, 80, 50)
+        else:  # dungeon
+            return (180, 100, 255)
+        
     def handle_events(self):
         """Verwerk input events"""
         for event in pygame.event.get():
@@ -108,6 +381,18 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
+                    
+                # Story intro handling
+                elif self.showing_story:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        if self.story_complete:
+                            # Start het level
+                            self.showing_story = False
+                        else:
+                            # Skip de animatie
+                            self.story_skip_requested = True
+                            
+                # Normale game controls
                 elif event.key == pygame.K_m:
                     self.show_minimap = not self.show_minimap
                 elif event.key == pygame.K_e:
@@ -122,9 +407,19 @@ class Game:
                     self.weapons.switch_to(2)  # Shotgun
                 elif event.key == pygame.K_q:
                     self.weapons.next_weapon()
+                elif event.key == pygame.K_h:
+                    self.use_health_pack()
+                    
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
-                    self.shoot()
+                    # Story handling
+                    if self.showing_story:
+                        if self.story_complete:
+                            self.showing_story = False
+                        else:
+                            self.story_skip_requested = True
+                    else:
+                        self.shoot()
                     
     def shoot(self):
         """Schiet met wapen"""
@@ -153,12 +448,36 @@ class Game:
                         self.kill_text = "ENEMY KILLED!"
                     self.kill_text_time = pygame.time.get_ticks()
                     
-                    # Check victory - alleen in level 2 als boss verslagen
-                    if self.current_level == 2 and self.enemy_manager.alive_count == 0:
-                        self.victory = True
+                    # Check victory - alleen in finale boss level als alle vijanden verslagen
+                    if self.level_data.get('has_boss', False) and self.enemy_manager.alive_count == 0:
+                        if self.current_level >= self.total_levels:
+                            # Finale overwinning!
+                            self.victory = True
+                        else:
+                            # Naar volgend level
+                            self.transitioning = True
+                            self.transition_time = pygame.time.get_ticks()
+                        
+    def use_health_pack(self):
+        """Gebruik een health pack uit inventory"""
+        if self.game_over or self.victory:
+            return
+            
+        if self.health_packs_inventory > 0 and self.player_health < self.player_max_health:
+            self.health_packs_inventory -= 1
+            old_health = self.player_health
+            self.player_health = min(self.player_max_health, self.player_health + self.health_pack_heal)
+            healed = self.player_health - old_health
+            self.kill_text = f"+{healed} HP"
+            self.kill_text_time = pygame.time.get_ticks()
                     
     def update(self, dt):
         """Update game state"""
+        # Story intro update
+        if self.showing_story:
+            self._update_story(dt)
+            return
+            
         if self.game_over or self.victory:
             return
             
@@ -166,11 +485,11 @@ class Game:
         if self.transitioning:
             current_time = pygame.time.get_ticks()
             if current_time - self.transition_time > self.transition_duration:
-                self.start_boss_level()
+                self._start_next_level()
             return
             
-        # Check of quest compleet is en start transitie
-        if self.current_level == 1 and self.quest.quest_complete and not self.transitioning:
+        # Check of level compleet is via exit door
+        if self.level_data.get('has_quest', False) and self.quest.level_complete and not self.transitioning:
             self.transitioning = True
             self.transition_time = pygame.time.get_ticks()
             return
@@ -191,9 +510,22 @@ class Game:
         self.weapons.update(dt, is_moving)
         self.raycaster.raycast(self.player)
         
-        # Update quest (alleen in level 1)
-        if self.current_level == 1:
-            self.quest.update(dt, self.player, self.enemy_manager)
+        # Update quest en health packs
+        self.quest.update(dt, self.player, self.enemy_manager)
+        
+        # Check health pack pickup (automatisch oppakken)
+        picked_up = self.quest.try_pickup_health_pack(self.player.x, self.player.y)
+        if picked_up:
+            self.health_packs_inventory += 1
+            self.kill_text = "+1 HEALTH PACK!"
+            self.kill_text_time = pygame.time.get_ticks()
+            
+        # Check ammo pack pickup (automatisch oppakken)
+        ammo_picked = self.quest.try_pickup_ammo_pack(self.player.x, self.player.y)
+        if ammo_picked > 0:
+            self.weapons.add_ammo_all(ammo_picked)
+            self.kill_text = f"+{ammo_picked} AMMO!"
+            self.kill_text_time = pygame.time.get_ticks()
         
         # Automatisch vuur (houd muis/spatie ingedrukt)
         mouse_buttons = pygame.mouse.get_pressed()
@@ -210,55 +542,70 @@ class Game:
                 self.player_health = 0
                 self.game_over = True
                 
-    def start_boss_level(self):
-        """Start level 2: Boss Arena"""
-        self.current_level = 2
+    def _start_next_level(self):
+        """Start het volgende level"""
+        next_level = self.current_level + 1
+        
+        if next_level > self.total_levels:
+            # Alle levels voltooid!
+            self.victory = True
+            self.transitioning = False
+            return
+            
         self.transitioning = False
         
-        # Reset player positie naar centrum
-        self.player.x = 2.5
-        self.player.y = 2.5
-        self.player.angle = 0.8  # Kijk richting centrum
-        
-        # Geef health bonus voor het voltooien van de quest
-        health_bonus = 50
+        # Geef health bonus voor het voltooien van het level
+        health_bonus = 30
         self.player_health = min(self.player_max_health, self.player_health + health_bonus)
         
-        # Spawn boss level vijanden
-        self.enemy_manager = EnemyManager(level=2)
+        # Laad het nieuwe level
+        self._load_level(next_level)
         
-        # Reset doors
-        self.door_manager = DoorManager(MAP)
-        self.player.set_door_manager(self.door_manager)
-        self.raycaster.set_door_manager(self.door_manager)
-        
-        # Reset muis
-        pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
-        pygame.mouse.get_rel()
-        
-        print("\n" + "="*50)
-        print("  LEVEL 2: BOSS ARENA")
-        print("  Defeat the DEMON LORD!")
-        print("="*50 + "\n")
+        # Start story intro voor nieuw level
+        self._start_story()
         
     def draw_transition(self):
         """Teken level transitie scherm"""
         # Donkere overlay
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         
-        # Pulserende achtergrond
+        # Pulserende achtergrond - kleur gebaseerd op volgend level thema
         current_time = pygame.time.get_ticks()
-        pulse = (math.sin(current_time * 0.005) + 1) * 0.5
-        overlay.fill((20, 0, 40, 230))
+        next_level_data = get_level_data(self.current_level + 1)
+        
+        # Thema kleuren
+        theme = next_level_data.get('theme', 'dungeon') if next_level_data else 'dungeon'
+        if theme == 'industrial':
+            bg_color = (30, 35, 40, 230)
+            bar_color = (100, 150, 200)
+            text_color = (150, 200, 255)
+        elif theme == 'hell':
+            bg_color = (40, 10, 10, 230)
+            bar_color = (255, 100, 50)
+            text_color = (255, 150, 100)
+        else:  # dungeon
+            bg_color = (20, 0, 40, 230)
+            bar_color = (180, 80, 255)
+            text_color = (200, 100, 255)
+            
+        overlay.fill(bg_color)
         self.screen.blit(overlay, (0, 0))
         
-        # Titel
-        title = self.title_font.render("QUEST COMPLETE!", True, (255, 200, 50))
+        # Titel - level compleet
+        if self.level_data.get('has_quest', False):
+            title_text = "QUEST COMPLETE!"
+        else:
+            title_text = "BOSS DEFEATED!"
+        title = self.title_font.render(title_text, True, (255, 200, 50))
         title_rect = title.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 100))
         self.screen.blit(title, title_rect)
         
-        # Subtitle
-        sub = self.big_font.render("Entering Boss Arena...", True, (200, 100, 255))
+        # Next level info
+        if next_level_data:
+            next_name = next_level_data.get('name', 'UNKNOWN')
+            sub = self.big_font.render(f"Entering: {next_name}", True, text_color)
+        else:
+            sub = self.big_font.render("Victory approaching...", True, text_color)
         sub_rect = sub.get_rect(center=(HALF_WIDTH, HALF_HEIGHT))
         self.screen.blit(sub, sub_rect)
         
@@ -272,20 +619,25 @@ class Game:
         bar_y = HALF_HEIGHT + 80
         
         # Background
-        pygame.draw.rect(self.screen, (40, 20, 60), (bar_x, bar_y, bar_width, bar_height))
+        pygame.draw.rect(self.screen, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height))
         # Fill
-        pygame.draw.rect(self.screen, (180, 80, 255), (bar_x, bar_y, int(bar_width * progress), bar_height))
+        pygame.draw.rect(self.screen, bar_color, (bar_x, bar_y, int(bar_width * progress), bar_height))
         # Border
-        pygame.draw.rect(self.screen, (100, 50, 150), (bar_x, bar_y, bar_width, bar_height), 2)
+        pygame.draw.rect(self.screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height), 2)
         
         # Hint tekst
-        hint = self.font.render("Prepare for battle!", True, (150, 150, 200))
+        if next_level_data:
+            hint_text = next_level_data.get('subtitle', 'Prepare for battle!')
+        else:
+            hint_text = "Prepare for battle!"
+        hint = self.font.render(hint_text, True, (150, 150, 200))
         hint_rect = hint.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 140))
         self.screen.blit(hint, hint_rect)
         
     def draw_minimap(self):
         """Teken minimap in hoek"""
-        minimap_size = len(MAP) * MINIMAP_TILE_SIZE
+        current_map = self.current_map
+        minimap_size = len(current_map) * MINIMAP_TILE_SIZE
         offset_x = 10
         offset_y = HEIGHT - minimap_size - 10
         
@@ -295,7 +647,7 @@ class Game:
                          minimap_size + 4, minimap_size + 4))
         
         # Teken tiles
-        for y, row in enumerate(MAP):
+        for y, row in enumerate(current_map):
             for x, tile in enumerate(row):
                 if tile:
                     if tile == 9:
@@ -304,6 +656,9 @@ class Game:
                             color = (100, 70, 45)
                         else:
                             color = (180, 120, 80)
+                    elif tile == 6:
+                        # Lava/hazard - rood/oranje
+                        color = (200, 80, 30)
                     else:
                         color = WALL_COLORS.get(tile, (100, 100, 100))
                     
@@ -324,8 +679,12 @@ class Game:
                 else:
                     pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 2)
                     
-        # Teken crystals op minimap
+        # Teken crystals, items, key en exit deur op minimap
         self.quest.draw_minimap_crystals(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
+        self.quest.draw_minimap_health_packs(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
+        self.quest.draw_minimap_ammo_packs(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
+        self.quest.draw_minimap_key(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
+        self.quest.draw_minimap_exit_door(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
                     
         # Teken speler
         player_x = offset_x + self.player.x * MINIMAP_TILE_SIZE
@@ -378,6 +737,12 @@ class Game:
         enemies_text = self.small_font.render(
             f"Enemies: {self.enemy_manager.alive_count}", True, (200, 100, 100))
         self.screen.blit(enemies_text, (20, 110))
+        
+        # Health packs inventory
+        hp_color = (100, 255, 100) if self.health_packs_inventory > 0 else (100, 100, 100)
+        hp_text = self.small_font.render(
+            f"Health Packs: {self.health_packs_inventory} [H]", True, hp_color)
+        self.screen.blit(hp_text, (20, 130))
         
         # Boss health bar (als boss nog leeft en geactiveerd is)
         if self.enemy_manager.boss_alive:
@@ -474,37 +839,61 @@ class Game:
     def draw_victory(self):
         """Teken victory scherm"""
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 50, 0, 180))
+        
+        # Kleurrijke gradient effect
+        current_time = pygame.time.get_ticks()
+        pulse = (math.sin(current_time * 0.003) + 1) * 0.5
+        
+        overlay.fill((0, int(40 + pulse * 20), 0, 200))
         self.screen.blit(overlay, (0, 0))
         
-        text = self.big_font.render("VICTORY!", True, (50, 255, 50))
-        text_rect = text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 80))
+        # Grote titel
+        text = self.title_font.render("VICTORY!", True, (50, 255, 50))
+        text_rect = text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 100))
         self.screen.blit(text, text_rect)
         
-        sub_text = self.font.render("The Demon Lord has been vanquished!", True, (200, 255, 200))
+        # Subtitels
+        sub_text = self.big_font.render("All realms have been conquered!", True, (200, 255, 200))
         sub_rect = sub_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 20))
         self.screen.blit(sub_text, sub_rect)
         
-        sub_text2 = self.font.render("You are the champion!", True, (255, 220, 100))
-        sub_rect2 = sub_text2.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 20))
+        sub_text2 = self.font.render(f"You completed all {self.total_levels} levels!", True, (255, 220, 100))
+        sub_rect2 = sub_text2.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 30))
         self.screen.blit(sub_text2, sub_rect2)
         
+        champion_text = self.font.render("You are the ULTIMATE CHAMPION!", True, (255, 200, 50))
+        champion_rect = champion_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 70))
+        self.screen.blit(champion_text, champion_rect)
+        
         exit_text = self.small_font.render("Press ESC to exit", True, (200, 200, 200))
-        exit_rect = exit_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 70))
+        exit_rect = exit_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 120))
         self.screen.blit(exit_text, exit_rect)
         
     def draw(self):
         """Render alles naar scherm"""
+        # Story intro
+        if self.showing_story:
+            self._draw_story()
+            pygame.display.flip()
+            return
+            
         self.screen.fill(BLACK)
         
         # Render 3D view
         self.raycaster.render(self.screen)
         
-        # Render sprites (vijanden en crystals)
+        # Render sprites (vijanden, crystals en health packs)
         self.sprite_renderer.clear()
         self.enemy_manager.render(self.sprite_renderer)
-        if self.current_level == 1:
+        
+        # Render crystals, key, exit door alleen voor quest levels
+        if self.level_data.get('has_quest', False):
             self.quest.render_crystals(self.sprite_renderer)
+            self.quest.render_key(self.sprite_renderer)
+            self.quest.render_exit_door(self.sprite_renderer)
+        # Health/ammo packs altijd
+        self.quest.render_health_packs(self.sprite_renderer)
+        self.quest.render_ammo_packs(self.sprite_renderer)
         self.sprite_renderer.render(self.screen, self.player, self.raycaster)
         
         # Damage flash
@@ -520,13 +909,24 @@ class Game:
         # HUD
         self.draw_hud()
         
-        # Quest HUD (alleen in level 1)
-        if self.current_level == 1:
+        # Quest HUD of Level indicator
+        if self.level_data.get('has_quest', False):
             self.quest.draw_hud(self.screen, self.font, self.small_font)
+        
+        # Level indicator altijd zichtbaar
+        level_name = self.level_data.get('name', f'LEVEL {self.current_level}')
+        
+        # Kleur gebaseerd op thema
+        theme = self.level_data.get('theme', 'dungeon')
+        if theme == 'industrial':
+            level_color = (150, 200, 255)
+        elif theme == 'hell':
+            level_color = (255, 100, 100)
         else:
-            # Level 2 indicator
-            boss_level_text = self.font.render("LEVEL 2: BOSS ARENA", True, (255, 100, 100))
-            self.screen.blit(boss_level_text, (WIDTH - 250, 40))
+            level_color = (200, 150, 255)
+            
+        level_text = self.small_font.render(f"LEVEL {self.current_level}: {level_name}", True, level_color)
+        self.screen.blit(level_text, (WIDTH - 300, 40))
         
         # Level transitie
         if self.transitioning:
@@ -542,9 +942,10 @@ class Game:
         
     def run(self):
         """Main game loop"""
-        print("\n" + "="*50)
+        print("\n" + "="*60)
         print("  DOOMIE - DOOM-achtige game in Python")
-        print("="*50)
+        print("  Multi-Level Edition")
+        print("="*60)
         print("\nBesturing:")
         print("  W/UP        - Vooruit")
         print("  S/DOWN      - Achteruit")
@@ -552,14 +953,18 @@ class Game:
         print("  MUIS        - Rondkijken")
         print("  SPACE/CLICK - Schieten (houd ingedrukt voor machinegun)")
         print("  1/2/3/Q     - Wissel wapen (Pistol/MachineGun/Shotgun)")
+        print("  H           - Gebruik Health Pack (+35 HP)")
         print("  E           - Open/sluit deur")
         print("  M           - Minimap toggle")
         print("  ESC         - Afsluiten")
-        print("\n" + "="*50)
-        print("\n  LEVEL 1: CRYSTAL HUNT")
-        print("  QUEST: Collect all 4 Demonic Crystals!")
-        print("  Complete the quest to unlock the Boss Arena!")
-        print("="*50 + "\n")
+        print("\n" + "="*60)
+        print(f"\n  LEVELS: {self.total_levels} realms to conquer!")
+        print("  1. THE DUNGEON    - Collect Crystals")
+        print("  2. BOSS ARENA     - Defeat Demon Lord")
+        print("  3. THE FACTORY    - Escape Industrial Hell")
+        print("  4. THE INFERNO    - Survive Hell's Depths")
+        print("  5. THE THRONE ROOM - Final Confrontation")
+        print("="*60 + "\n")
         
         while self.running:
             dt = self.clock.tick(FPS)

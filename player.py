@@ -10,6 +10,7 @@ class Player:
         self.angle = PLAYER_ANGLE
         self.pitch = 0  # Verticale kijkhoek (-200 tot 200 pixels offset)
         self.door_manager = None
+        self.game_map = None  # Dynamische map referentie
         
         # Muis instellingen
         self.mouse_sensitivity = 0.003
@@ -19,6 +20,10 @@ class Player:
     def set_door_manager(self, door_manager):
         """Stel door manager in voor collision checking"""
         self.door_manager = door_manager
+        
+    def set_map(self, game_map):
+        """Stel de actieve map in voor collision detection"""
+        self.game_map = game_map
         
     def movement(self, dt):
         """Verwerk speler beweging"""
@@ -88,11 +93,11 @@ class Player:
     def can_move_to(self, x, y):
         """Check of speler naar positie kan bewegen"""
         # Check muren
-        if is_wall(x, y):
+        if is_wall(x, y, self.game_map):
             return False
             
         # Check deuren
-        if is_door(x, y):
+        if is_door(x, y, self.game_map):
             if self.door_manager:
                 return self.door_manager.can_pass(x, y)
             return False

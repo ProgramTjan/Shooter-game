@@ -1,193 +1,513 @@
 """
 Sprite Systeem - Rendert 2D sprites in de 3D wereld
+Met mensachtige vijanden en loopanimaties
 """
 import pygame
 import math
 from settings import *
 
 
-def create_enemy_sprite(color_scheme='red', size=64):
-    """Maak een demon/vijand sprite met verschillende kleuren"""
+# Kleur schemes voor verschillende vijand types
+ENEMY_COLORS = {
+    'red': {
+        'skin': (210, 160, 140),
+        'shirt': (180, 40, 40),
+        'pants': (60, 50, 50),
+        'hair': (50, 30, 20),
+        'boots': (40, 30, 25),
+    },
+    'green': {
+        'skin': (180, 200, 160),
+        'shirt': (40, 120, 40),
+        'pants': (50, 60, 50),
+        'hair': (30, 50, 30),
+        'boots': (35, 45, 30),
+    },
+    'blue': {
+        'skin': (200, 180, 170),
+        'shirt': (40, 60, 160),
+        'pants': (40, 40, 60),
+        'hair': (30, 30, 50),
+        'boots': (30, 30, 45),
+    },
+    'purple': {
+        'skin': (200, 170, 190),
+        'shirt': (120, 40, 140),
+        'pants': (50, 40, 55),
+        'hair': (60, 30, 70),
+        'boots': (45, 30, 50),
+    },
+    'orange': {
+        'skin': (220, 180, 150),
+        'shirt': (200, 120, 40),
+        'pants': (70, 55, 40),
+        'hair': (100, 60, 30),
+        'boots': (60, 45, 30),
+    },
+}
+
+
+def create_humanoid_sprite(color_scheme='red', size=64, walk_frame=0):
+    """
+    Maak een mensachtige vijand sprite
+    walk_frame: 0 = idle, 1 = walk left leg forward, 2 = walk right leg forward
+    """
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
-    # Schaal factor
-    s = size / 64
+    s = size / 64  # Schaal factor
+    cx = size // 2  # Center x
     
-    # Kleur schemes
-    colors = {
-        'red': {'body': (180, 40, 40), 'head': (200, 50, 50), 'horn': (100, 30, 30), 'arm': (160, 35, 35)},
-        'green': {'body': (40, 140, 40), 'head': (50, 160, 50), 'horn': (30, 80, 30), 'arm': (35, 120, 35)},
-        'blue': {'body': (40, 40, 180), 'head': (50, 50, 200), 'horn': (30, 30, 100), 'arm': (35, 35, 160)},
-        'purple': {'body': (140, 40, 140), 'head': (160, 50, 160), 'horn': (80, 30, 80), 'arm': (120, 35, 120)},
-        'orange': {'body': (200, 100, 30), 'head': (220, 120, 40), 'horn': (120, 60, 20), 'arm': (180, 90, 25)},
-        'boss': {'body': (80, 20, 20), 'head': (100, 25, 25), 'horn': (50, 10, 10), 'arm': (70, 18, 18)},
-    }
+    colors = ENEMY_COLORS.get(color_scheme, ENEMY_COLORS['red'])
     
-    c = colors.get(color_scheme, colors['red'])
+    # Arm/been posities gebaseerd op walk frame
+    if walk_frame == 0:  # Idle
+        left_arm_angle = 0
+        right_arm_angle = 0
+        left_leg_offset = 0
+        right_leg_offset = 0
+    elif walk_frame == 1:  # Links been voor
+        left_arm_angle = 15
+        right_arm_angle = -15
+        left_leg_offset = 4
+        right_leg_offset = -3
+    else:  # Rechts been voor
+        left_arm_angle = -15
+        right_arm_angle = 15
+        left_leg_offset = -3
+        right_leg_offset = 4
     
-    # Lichaam
-    pygame.draw.ellipse(sprite, c['body'], (int(10*s), int(18*s), int(44*s), int(42*s)))
+    # === BENEN ===
+    leg_width = int(7 * s)
+    leg_height = int(18 * s)
+    leg_y = int(44 * s)
     
-    # Hoofd
-    pygame.draw.circle(sprite, c['head'], (int(32*s), int(18*s)), int(14*s))
+    # Linker been
+    left_leg_x = cx - int(8 * s)
+    pygame.draw.rect(sprite, colors['pants'], 
+                    (left_leg_x, leg_y + left_leg_offset * s, leg_width, leg_height))
+    # Linker laars
+    pygame.draw.rect(sprite, colors['boots'],
+                    (left_leg_x - 1, leg_y + leg_height - int(4*s) + left_leg_offset * s, 
+                     leg_width + 2, int(5*s)))
     
-    # Hoorns
-    pygame.draw.polygon(sprite, c['horn'], [(int(20*s), int(10*s)), (int(18*s), 0), (int(25*s), int(8*s))])
-    pygame.draw.polygon(sprite, c['horn'], [(int(44*s), int(10*s)), (int(46*s), 0), (int(39*s), int(8*s))])
+    # Rechter been
+    right_leg_x = cx + int(1 * s)
+    pygame.draw.rect(sprite, colors['pants'],
+                    (right_leg_x, leg_y + right_leg_offset * s, leg_width, leg_height))
+    # Rechter laars
+    pygame.draw.rect(sprite, colors['boots'],
+                    (right_leg_x - 1, leg_y + leg_height - int(4*s) + right_leg_offset * s,
+                     leg_width + 2, int(5*s)))
     
-    # Ogen (gloeiend)
-    eye_color = (255, 0, 0) if color_scheme == 'boss' else (255, 255, 0)
-    pygame.draw.circle(sprite, eye_color, (int(26*s), int(16*s)), int(4*s))
-    pygame.draw.circle(sprite, eye_color, (int(38*s), int(16*s)), int(4*s))
-    pygame.draw.circle(sprite, (0, 0, 0), (int(27*s), int(16*s)), int(2*s))
-    pygame.draw.circle(sprite, (0, 0, 0), (int(39*s), int(16*s)), int(2*s))
+    # === TORSO ===
+    torso_width = int(22 * s)
+    torso_height = int(20 * s)
+    torso_x = cx - torso_width // 2
+    torso_y = int(26 * s)
     
-    # Mond
-    pygame.draw.ellipse(sprite, (50, 0, 0), (int(24*s), int(24*s), int(16*s), int(6*s)))
-    # Tanden
-    for i in range(3):
-        x = int((26 + i * 5) * s)
-        pygame.draw.polygon(sprite, (255, 255, 255), [(x, int(24*s)), (x + int(3*s), int(24*s)), (x + int(1*s), int(28*s))])
+    # Shirt/torso
+    pygame.draw.rect(sprite, colors['shirt'], (torso_x, torso_y, torso_width, torso_height))
     
-    # Armen
-    pygame.draw.ellipse(sprite, c['arm'], (int(2*s), int(28*s), int(12*s), int(22*s)))
-    pygame.draw.ellipse(sprite, c['arm'], (int(50*s), int(28*s), int(12*s), int(22*s)))
+    # Kraag detail
+    collar_color = tuple(min(255, c + 30) for c in colors['shirt'])
+    pygame.draw.rect(sprite, collar_color, (torso_x + int(6*s), torso_y, int(10*s), int(4*s)))
     
-    # Klauwen
-    claw_color = (50, 20, 20)
-    for i in range(2):
-        pygame.draw.line(sprite, claw_color, (int((5 + i*4)*s), int(48*s)), (int((3 + i*4)*s), int(58*s)), max(1, int(2*s)))
-        pygame.draw.line(sprite, claw_color, (int((55 + i*4)*s), int(48*s)), (int((57 + i*4)*s), int(58*s)), max(1, int(2*s)))
+    # === ARMEN ===
+    arm_width = int(6 * s)
+    arm_length = int(16 * s)
+    
+    # Linker arm
+    left_arm_x = torso_x - arm_width + 2
+    left_arm_y = torso_y + int(2 * s) + int(left_arm_angle * 0.3 * s)
+    pygame.draw.rect(sprite, colors['shirt'], (left_arm_x, left_arm_y, arm_width, arm_length))
+    # Hand
+    pygame.draw.circle(sprite, colors['skin'], 
+                      (left_arm_x + arm_width // 2, left_arm_y + arm_length), int(3*s))
+    
+    # Rechter arm - omhoog gericht met wapen
+    right_arm_x = torso_x + torso_width - 2
+    right_arm_y = torso_y + int(2 * s)
+    
+    # Arm naar voren gericht (korter verticaal, meer naar voren)
+    pygame.draw.rect(sprite, colors['shirt'], (right_arm_x, right_arm_y, arm_width, int(arm_length * 0.7)))
+    # Onderarm naar voren
+    forearm_x = right_arm_x + arm_width
+    forearm_y = right_arm_y + int(arm_length * 0.5)
+    pygame.draw.rect(sprite, colors['shirt'], (forearm_x - 2, forearm_y, int(10*s), arm_width))
+    
+    # Hand met wapen
+    hand_x = forearm_x + int(8*s)
+    hand_y = forearm_y + arm_width // 2
+    pygame.draw.circle(sprite, colors['skin'], (hand_x, hand_y), int(3*s))
+    
+    # === WAPEN (Pistool/Gun) ===
+    gun_color = (40, 40, 45)
+    gun_highlight = (70, 70, 75)
+    
+    # Loop van het wapen (naar voren gericht)
+    gun_x = hand_x + int(2*s)
+    gun_y = hand_y - int(2*s)
+    pygame.draw.rect(sprite, gun_color, (gun_x, gun_y, int(12*s), int(4*s)))  # Loop
+    pygame.draw.rect(sprite, gun_highlight, (gun_x, gun_y, int(12*s), int(1*s)))  # Highlight
+    
+    # Handvat
+    pygame.draw.rect(sprite, gun_color, (gun_x - int(2*s), gun_y + int(3*s), int(4*s), int(6*s)))
+    
+    # Vuurmond accent
+    pygame.draw.rect(sprite, (60, 60, 65), (gun_x + int(10*s), gun_y, int(2*s), int(4*s)))
+    
+    # === HOOFD ===
+    head_radius = int(10 * s)
+    head_y = int(16 * s)
+    
+    # Haar (achter hoofd)
+    hair_color = colors['hair']
+    pygame.draw.circle(sprite, hair_color, (cx, head_y - int(2*s)), head_radius + int(2*s))
+    
+    # Hoofd/gezicht
+    pygame.draw.circle(sprite, colors['skin'], (cx, head_y), head_radius)
+    
+    # Haar (boven op hoofd)
+    pygame.draw.ellipse(sprite, hair_color, 
+                       (cx - head_radius, head_y - head_radius - int(2*s), 
+                        head_radius * 2, int(10*s)))
+    
+    # Ogen
+    eye_offset = int(4 * s)
+    eye_y = head_y - int(1 * s)
+    eye_size = int(3 * s)
+    
+    # Wit van oog
+    pygame.draw.circle(sprite, (255, 255, 255), (cx - eye_offset, eye_y), eye_size)
+    pygame.draw.circle(sprite, (255, 255, 255), (cx + eye_offset, eye_y), eye_size)
+    
+    # Pupillen
+    pupil_size = int(2 * s)
+    pygame.draw.circle(sprite, (30, 30, 30), (cx - eye_offset, eye_y), pupil_size)
+    pygame.draw.circle(sprite, (30, 30, 30), (cx + eye_offset, eye_y), pupil_size)
+    
+    # Wenkbrauwen (boos)
+    brow_color = tuple(max(0, c - 30) for c in hair_color)
+    pygame.draw.line(sprite, brow_color, 
+                    (cx - eye_offset - int(3*s), eye_y - int(4*s)),
+                    (cx - eye_offset + int(3*s), eye_y - int(3*s)), max(1, int(2*s)))
+    pygame.draw.line(sprite, brow_color,
+                    (cx + eye_offset + int(3*s), eye_y - int(4*s)),
+                    (cx + eye_offset - int(3*s), eye_y - int(3*s)), max(1, int(2*s)))
+    
+    # Mond (grimas)
+    mouth_y = head_y + int(5 * s)
+    pygame.draw.arc(sprite, (100, 50, 50), 
+                   (cx - int(4*s), mouth_y - int(2*s), int(8*s), int(4*s)),
+                   3.14, 6.28, max(1, int(2*s)))
     
     return sprite
 
 
-def create_boss_sprite():
-    """Maak een grote boss sprite"""
-    size = 128  # Dubbel zo groot
+def create_enemy_walk_frames(color_scheme='red', size=64):
+    """Genereer alle walk animation frames voor een vijand"""
+    frames = []
+    frames.append(create_humanoid_sprite(color_scheme, size, 0))  # Idle
+    frames.append(create_humanoid_sprite(color_scheme, size, 1))  # Walk 1
+    frames.append(create_humanoid_sprite(color_scheme, size, 0))  # Idle (midden)
+    frames.append(create_humanoid_sprite(color_scheme, size, 2))  # Walk 2
+    return frames
+
+
+def create_enemy_sprite(color_scheme='red', size=64):
+    """Backwards compatible - retourneer idle frame"""
+    return create_humanoid_sprite(color_scheme, size, 0)
+
+
+def create_boss_sprite(walk_frame=0):
+    """Maak een grote boss sprite - imposante commandant"""
+    size = 128
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
-    s = size / 64  # Schaal factor
+    s = size / 64
+    cx = size // 2
     
-    # Donkere kleuren voor boss
-    body_color = (100, 20, 20)
-    head_color = (120, 25, 25)
-    horn_color = (60, 15, 15)
+    # Boss kleuren - donker en imposant
+    colors = {
+        'skin': (180, 140, 130),
+        'armor': (50, 50, 60),
+        'armor_highlight': (80, 80, 95),
+        'cape': (120, 20, 30),
+        'cape_dark': (80, 15, 20),
+        'hair': (30, 25, 25),
+        'boots': (35, 30, 30),
+        'gold': (200, 170, 80),
+    }
     
-    # Lichaam (groter en breder)
-    pygame.draw.ellipse(sprite, body_color, (int(8*s), int(20*s), int(48*s), int(40*s)))
+    # Walk animation offsets
+    if walk_frame == 0:
+        left_leg_offset = 0
+        right_leg_offset = 0
+        bob = 0
+    elif walk_frame == 1:
+        left_leg_offset = 5
+        right_leg_offset = -4
+        bob = -2
+    else:
+        left_leg_offset = -4
+        right_leg_offset = 5
+        bob = -2
     
-    # Hoofd
-    pygame.draw.circle(sprite, head_color, (int(32*s), int(20*s)), int(16*s))
+    # === CAPE (achtergrond) ===
+    cape_points = [
+        (cx - int(20*s), int(25*s)),
+        (cx + int(20*s), int(25*s)),
+        (cx + int(25*s), int(58*s)),
+        (cx - int(25*s), int(58*s)),
+    ]
+    pygame.draw.polygon(sprite, colors['cape'], cape_points)
+    # Cape schaduw
+    pygame.draw.polygon(sprite, colors['cape_dark'], [
+        (cx, int(25*s)),
+        (cx + int(25*s), int(58*s)),
+        (cx, int(55*s)),
+    ])
     
-    # Grote hoorns
-    pygame.draw.polygon(sprite, horn_color, [(int(18*s), int(10*s)), (int(12*s), 0), (int(24*s), int(6*s))])
-    pygame.draw.polygon(sprite, horn_color, [(int(46*s), int(10*s)), (int(52*s), 0), (int(40*s), int(6*s))])
-    # Extra hoorns
-    pygame.draw.polygon(sprite, horn_color, [(int(24*s), int(6*s)), (int(20*s), int(-5*s)), (int(28*s), int(4*s))])
-    pygame.draw.polygon(sprite, horn_color, [(int(40*s), int(6*s)), (int(44*s), int(-5*s)), (int(36*s), int(4*s))])
+    # === BENEN ===
+    leg_width = int(10 * s)
+    leg_height = int(22 * s)
+    leg_y = int(42 * s) + bob
     
-    # Gloeiende rode ogen
-    pygame.draw.circle(sprite, (255, 50, 50), (int(24*s), int(18*s)), int(5*s))
-    pygame.draw.circle(sprite, (255, 50, 50), (int(40*s), int(18*s)), int(5*s))
-    pygame.draw.circle(sprite, (255, 200, 50), (int(24*s), int(18*s)), int(3*s))
-    pygame.draw.circle(sprite, (255, 200, 50), (int(40*s), int(18*s)), int(3*s))
-    pygame.draw.circle(sprite, (0, 0, 0), (int(25*s), int(18*s)), int(2*s))
-    pygame.draw.circle(sprite, (0, 0, 0), (int(41*s), int(18*s)), int(2*s))
+    # Linker been (gepantserd)
+    left_leg_x = cx - int(12 * s)
+    pygame.draw.rect(sprite, colors['armor'], 
+                    (left_leg_x, leg_y + left_leg_offset, leg_width, leg_height))
+    pygame.draw.rect(sprite, colors['armor_highlight'],
+                    (left_leg_x, leg_y + left_leg_offset, int(3*s), leg_height))
+    # Laars
+    pygame.draw.rect(sprite, colors['boots'],
+                    (left_leg_x - 2, leg_y + leg_height - int(5*s) + left_leg_offset, 
+                     leg_width + 4, int(7*s)))
     
-    # Grote mond met veel tanden
-    pygame.draw.ellipse(sprite, (30, 0, 0), (int(20*s), int(28*s), int(24*s), int(10*s)))
-    for i in range(5):
-        x = int((22 + i * 4) * s)
-        pygame.draw.polygon(sprite, (255, 255, 255), 
-                          [(x, int(28*s)), (x + int(3*s), int(28*s)), (x + int(1*s), int(35*s))])
+    # Rechter been
+    right_leg_x = cx + int(2 * s)
+    pygame.draw.rect(sprite, colors['armor'],
+                    (right_leg_x, leg_y + right_leg_offset, leg_width, leg_height))
+    pygame.draw.rect(sprite, colors['armor_highlight'],
+                    (right_leg_x, leg_y + right_leg_offset, int(3*s), leg_height))
+    # Laars
+    pygame.draw.rect(sprite, colors['boots'],
+                    (right_leg_x - 2, leg_y + leg_height - int(5*s) + right_leg_offset,
+                     leg_width + 4, int(7*s)))
     
-    # Grote armen met spikes
-    pygame.draw.ellipse(sprite, (90, 18, 18), (0, int(25*s), int(16*s), int(28*s)))
-    pygame.draw.ellipse(sprite, (90, 18, 18), (int(48*s), int(25*s), int(16*s), int(28*s)))
+    # === TORSO (gepantserd) ===
+    torso_width = int(32 * s)
+    torso_height = int(24 * s)
+    torso_x = cx - torso_width // 2
+    torso_y = int(22 * s) + bob
     
-    # Spike details op armen
-    spike_color = (60, 15, 15)
-    pygame.draw.polygon(sprite, spike_color, [(int(4*s), int(30*s)), (int(-2*s), int(35*s)), (int(6*s), int(38*s))])
-    pygame.draw.polygon(sprite, spike_color, [(int(60*s), int(30*s)), (int(66*s), int(35*s)), (int(58*s), int(38*s))])
+    # Borstplaat
+    pygame.draw.rect(sprite, colors['armor'], (torso_x, torso_y, torso_width, torso_height))
+    # Highlight
+    pygame.draw.rect(sprite, colors['armor_highlight'], 
+                    (torso_x, torso_y, int(8*s), torso_height))
+    # Gouden details
+    pygame.draw.rect(sprite, colors['gold'], 
+                    (torso_x + int(12*s), torso_y + int(4*s), int(8*s), int(8*s)), 2)
+    pygame.draw.line(sprite, colors['gold'],
+                    (cx, torso_y), (cx, torso_y + torso_height), 2)
     
-    # Grote klauwen
-    for i in range(3):
-        pygame.draw.line(sprite, (40, 10, 10), 
-                        (int((4 + i*5)*s), int(52*s)), 
-                        (int((1 + i*5)*s), int(62*s)), int(3*s))
-        pygame.draw.line(sprite, (40, 10, 10), 
-                        (int((52 + i*5)*s), int(52*s)), 
-                        (int((55 + i*5)*s), int(62*s)), int(3*s))
+    # === ARMEN (gepantserd) ===
+    arm_width = int(10 * s)
+    arm_length = int(20 * s)
     
-    # Gloeiende aura effect
+    # Schouderplaten
+    pygame.draw.ellipse(sprite, colors['armor_highlight'],
+                       (torso_x - int(6*s), torso_y - int(2*s), int(14*s), int(10*s)))
+    pygame.draw.ellipse(sprite, colors['armor_highlight'],
+                       (torso_x + torso_width - int(8*s), torso_y - int(2*s), int(14*s), int(10*s)))
+    
+    # Linker arm
+    left_arm_x = torso_x - arm_width + 2
+    left_arm_y = torso_y + int(6 * s)
+    pygame.draw.rect(sprite, colors['armor'], (left_arm_x, left_arm_y, arm_width, arm_length))
+    # Gauntlet
+    pygame.draw.rect(sprite, colors['armor_highlight'],
+                    (left_arm_x - 1, left_arm_y + arm_length - int(5*s), arm_width + 2, int(6*s)))
+    
+    # Rechter arm - naar voren gericht met wapen
+    right_arm_x = torso_x + torso_width - 2
+    right_arm_y = torso_y + int(6 * s)
+    # Bovenarm
+    pygame.draw.rect(sprite, colors['armor'], (right_arm_x, right_arm_y, arm_width, int(arm_length * 0.6)))
+    
+    # Onderarm naar voren (horizontaal)
+    forearm_x = right_arm_x + arm_width
+    forearm_y = right_arm_y + int(arm_length * 0.4)
+    pygame.draw.rect(sprite, colors['armor'], (forearm_x - 2, forearm_y, int(14*s), arm_width))
+    # Gauntlet
+    pygame.draw.rect(sprite, colors['armor_highlight'],
+                    (forearm_x + int(10*s), forearm_y - 1, int(5*s), arm_width + 2))
+    
+    # === DEMONISCH WAPEN (Grote vuurstaf/cannon) ===
+    weapon_x = forearm_x + int(13*s)
+    weapon_y = forearm_y + arm_width // 2
+    
+    # Wapen basis (donker metaal met rode gloed)
+    weapon_color = (30, 25, 35)
+    weapon_glow = (150, 40, 30)
+    weapon_gold = colors['gold']
+    
+    # Hoofdloop
+    pygame.draw.rect(sprite, weapon_color, (weapon_x, weapon_y - int(4*s), int(20*s), int(8*s)))
+    
+    # Gouden ringen
+    pygame.draw.rect(sprite, weapon_gold, (weapon_x + int(3*s), weapon_y - int(5*s), int(3*s), int(10*s)))
+    pygame.draw.rect(sprite, weapon_gold, (weapon_x + int(12*s), weapon_y - int(5*s), int(3*s), int(10*s)))
+    
+    # Vuurmond met gloed
+    pygame.draw.rect(sprite, weapon_glow, (weapon_x + int(17*s), weapon_y - int(3*s), int(4*s), int(6*s)))
+    pygame.draw.circle(sprite, (255, 100, 50), (weapon_x + int(20*s), weapon_y), int(3*s))
+    
+    # Demonic details
+    pygame.draw.circle(sprite, weapon_glow, (weapon_x + int(8*s), weapon_y), int(2*s))
+    
+    # === HOOFD ===
+    head_radius = int(14 * s)
+    head_y = int(14 * s) + bob
+    
+    # Helm
+    helm_color = colors['armor']
+    pygame.draw.circle(sprite, helm_color, (cx, head_y), head_radius)
+    
+    # Gezicht opening
+    pygame.draw.ellipse(sprite, colors['skin'],
+                       (cx - int(8*s), head_y - int(4*s), int(16*s), int(14*s)))
+    
+    # Ogen (intens, rood glanzend)
+    eye_offset = int(5 * s)
+    eye_y = head_y
+    pygame.draw.circle(sprite, (200, 50, 50), (cx - eye_offset, eye_y), int(4*s))
+    pygame.draw.circle(sprite, (200, 50, 50), (cx + eye_offset, eye_y), int(4*s))
+    pygame.draw.circle(sprite, (255, 150, 100), (cx - eye_offset, eye_y), int(2*s))
+    pygame.draw.circle(sprite, (255, 150, 100), (cx + eye_offset, eye_y), int(2*s))
+    
+    # Helm hoorns/decoratie
+    horn_color = colors['gold']
+    pygame.draw.polygon(sprite, horn_color, [
+        (cx - int(10*s), head_y - int(8*s)),
+        (cx - int(15*s), head_y - int(18*s)),
+        (cx - int(8*s), head_y - int(10*s)),
+    ])
+    pygame.draw.polygon(sprite, horn_color, [
+        (cx + int(10*s), head_y - int(8*s)),
+        (cx + int(15*s), head_y - int(18*s)),
+        (cx + int(8*s), head_y - int(10*s)),
+    ])
+    
+    # Gloeiende aura
     for r in range(3):
-        alpha = 30 - r * 10
+        alpha = 25 - r * 7
         glow = pygame.Surface((size, size), pygame.SRCALPHA)
-        pygame.draw.ellipse(glow, (255, 50, 0, alpha), 
-                           (int((6-r*2)*s), int((18-r*2)*s), int((52+r*4)*s), int((44+r*4)*s)))
+        pygame.draw.ellipse(glow, (255, 50, 50, alpha),
+                           (cx - int((25 + r*5)*s), int((15 + bob - r*3)*s),
+                            int((50 + r*10)*s), int((50 + r*6)*s)))
         sprite.blit(glow, (0, 0))
     
     return sprite
 
 
+def create_boss_walk_frames():
+    """Genereer walk frames voor de boss"""
+    frames = []
+    frames.append(create_boss_sprite(0))
+    frames.append(create_boss_sprite(1))
+    frames.append(create_boss_sprite(0))
+    frames.append(create_boss_sprite(2))
+    return frames
+
+
 def create_dead_enemy_sprite(color_scheme='red'):
-    """Maak een dode vijand sprite"""
+    """Maak een dode mensachtige vijand sprite - liggend op de grond"""
     size = 64
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
-    colors = {
-        'red': (100, 30, 30),
-        'green': (30, 80, 30),
-        'blue': (30, 30, 100),
-        'purple': (80, 30, 80),
-        'orange': (120, 60, 20),
-        'boss': (60, 15, 15),
-    }
-    body_color = colors.get(color_scheme, (100, 30, 30))
+    colors = ENEMY_COLORS.get(color_scheme, ENEMY_COLORS['red'])
+    s = size / 64
     
-    pygame.draw.ellipse(sprite, (100, 20, 20), (5, 45, 54, 18))
-    pygame.draw.ellipse(sprite, body_color, (10, 40, 44, 16))
+    # Bloedplas
+    pygame.draw.ellipse(sprite, (100, 20, 20), (int(5*s), int(45*s), int(54*s), int(16*s)))
     
-    for ex in [22, 38]:
-        pygame.draw.line(sprite, (40, 40, 40), (ex-3, 45), (ex+3, 51), 2)
-        pygame.draw.line(sprite, (40, 40, 40), (ex+3, 45), (ex-3, 51), 2)
+    # Liggend lichaam (horizontaal)
+    # Torso
+    pygame.draw.ellipse(sprite, colors['shirt'], (int(15*s), int(42*s), int(34*s), int(14*s)))
+    
+    # Hoofd (op zij)
+    head_x = int(10*s)
+    head_y = int(48*s)
+    pygame.draw.circle(sprite, colors['skin'], (head_x, head_y), int(8*s))
+    pygame.draw.circle(sprite, colors['hair'], (head_x - int(2*s), head_y - int(3*s)), int(6*s))
+    
+    # X ogen
+    pygame.draw.line(sprite, (50, 50, 50), (head_x - 2, head_y - 2), (head_x + 2, head_y + 2), 2)
+    pygame.draw.line(sprite, (50, 50, 50), (head_x + 2, head_y - 2), (head_x - 2, head_y + 2), 2)
+    
+    # Benen (gestrekt)
+    pygame.draw.rect(sprite, colors['pants'], (int(45*s), int(44*s), int(14*s), int(6*s)))
+    pygame.draw.rect(sprite, colors['boots'], (int(56*s), int(44*s), int(5*s), int(6*s)))
     
     return sprite
 
 
 def create_dead_boss_sprite():
-    """Maak een dode boss sprite"""
+    """Maak een dode boss sprite - gevallen krijger"""
     size = 128
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     
+    s = size / 64
+    
     # Grote bloedplas
-    pygame.draw.ellipse(sprite, (80, 15, 15), (10, 80, 108, 40))
-    pygame.draw.ellipse(sprite, (60, 12, 12), (20, 75, 88, 35))
+    pygame.draw.ellipse(sprite, (80, 15, 15), (int(10*s), int(50*s), int(108*s), int(25*s)))
     
-    # Lichaam
-    pygame.draw.ellipse(sprite, (50, 10, 10), (20, 70, 88, 30))
+    # Cape gespreid
+    pygame.draw.ellipse(sprite, (80, 15, 20), (int(5*s), int(45*s), int(118*s), int(30*s)))
     
-    # X ogen
-    for ex in [44, 74]:
-        pygame.draw.line(sprite, (30, 30, 30), (ex-6, 78), (ex+6, 90), 3)
-        pygame.draw.line(sprite, (30, 30, 30), (ex+6, 78), (ex-6, 90), 3)
+    # Gepantserd lichaam (liggend)
+    armor_color = (40, 40, 50)
+    pygame.draw.ellipse(sprite, armor_color, (int(25*s), int(52*s), int(78*s), int(18*s)))
+    
+    # Helm (op zij)
+    pygame.draw.circle(sprite, armor_color, (int(20*s), int(58*s)), int(12*s))
+    # Gouden hoorn gebroken
+    pygame.draw.polygon(sprite, (150, 130, 60), [
+        (int(15*s), int(50*s)),
+        (int(8*s), int(45*s)),
+        (int(18*s), int(52*s)),
+    ])
+    
+    # X ogen (in helm opening)
+    pygame.draw.line(sprite, (100, 30, 30), (int(17*s), int(55*s)), (int(23*s), int(61*s)), 2)
+    pygame.draw.line(sprite, (100, 30, 30), (int(23*s), int(55*s)), (int(17*s), int(61*s)), 2)
     
     return sprite
 
 
 def create_hurt_enemy_sprite(size=64):
-    """Maak een gewonde vijand sprite (wit flash)"""
+    """Maak een gewonde vijand sprite (wit/rood flash) - mensachtig silhouet"""
     sprite = pygame.Surface((size, size), pygame.SRCALPHA)
     s = size / 64
+    cx = size // 2
     
-    white = (255, 255, 255)
-    pygame.draw.ellipse(sprite, white, (int(10*s), int(18*s), int(44*s), int(42*s)))
-    pygame.draw.circle(sprite, white, (int(32*s), int(18*s)), int(14*s))
-    pygame.draw.polygon(sprite, white, [(int(20*s), int(10*s)), (int(18*s), 0), (int(25*s), int(8*s))])
-    pygame.draw.polygon(sprite, white, [(int(44*s), int(10*s)), (int(46*s), 0), (int(39*s), int(8*s))])
-    pygame.draw.ellipse(sprite, white, (int(2*s), int(28*s), int(12*s), int(22*s)))
-    pygame.draw.ellipse(sprite, white, (int(50*s), int(28*s), int(12*s), int(22*s)))
+    flash_color = (255, 200, 200)
+    
+    # Benen
+    pygame.draw.rect(sprite, flash_color, (cx - int(8*s), int(44*s), int(7*s), int(18*s)))
+    pygame.draw.rect(sprite, flash_color, (cx + int(1*s), int(44*s), int(7*s), int(18*s)))
+    
+    # Torso
+    pygame.draw.rect(sprite, flash_color, (cx - int(11*s), int(26*s), int(22*s), int(20*s)))
+    
+    # Armen
+    pygame.draw.rect(sprite, flash_color, (cx - int(17*s), int(28*s), int(6*s), int(16*s)))
+    pygame.draw.rect(sprite, flash_color, (cx + int(11*s), int(28*s), int(6*s), int(16*s)))
+    
+    # Hoofd
+    pygame.draw.circle(sprite, flash_color, (cx, int(16*s)), int(10*s))
     
     return sprite
 
@@ -199,13 +519,16 @@ class SpriteRenderer:
         self.game = game
         self.sprites_to_render = []
         
-    def add_sprite(self, sprite_surface, x, y, scale=1.0):
-        """Voeg sprite toe aan render queue"""
+    def add_sprite(self, sprite_surface, x, y, scale=1.0, y_offset=0.0):
+        """Voeg sprite toe aan render queue
+        y_offset: verticale offset op scherm (positief = lager/naar vloer)
+        """
         self.sprites_to_render.append({
             'surface': sprite_surface,
             'x': x,
             'y': y,
-            'scale': scale
+            'scale': scale,
+            'y_offset': y_offset
         })
         
     def clear(self):
@@ -243,7 +566,8 @@ class SpriteRenderer:
                 'distance': distance,
                 'delta_angle': delta_angle,
                 'scale': sprite['scale'],
-                'pitch': player.pitch
+                'pitch': player.pitch,
+                'y_offset': sprite.get('y_offset', 0.0)
             })
             
         sprite_data.sort(key=lambda s: s['distance'], reverse=True)
@@ -258,6 +582,7 @@ class SpriteRenderer:
         surface = sprite_data['surface']
         scale = sprite_data['scale']
         pitch = sprite_data.get('pitch', 0)
+        y_offset = sprite_data.get('y_offset', 0.0)
         
         screen_x = HALF_WIDTH + delta_angle * HALF_WIDTH / HALF_FOV
         
@@ -274,9 +599,12 @@ class SpriteRenderer:
                 scaled = pygame.transform.scale(surface, (int(sprite_width), int(sprite_height)))
             except:
                 return
-                
+            
+            # y_offset wordt geschaald op basis van afstand voor perspectief
+            screen_y_offset = (y_offset * SCREEN_DIST / distance)
+            
             x = screen_x - sprite_width / 2
-            y = HALF_HEIGHT + pitch - sprite_height / 2
+            y = HALF_HEIGHT + pitch - sprite_height / 2 + screen_y_offset
             
             sprite_left = int(max(0, x))
             sprite_right = int(min(WIDTH, x + sprite_width))

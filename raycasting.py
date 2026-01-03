@@ -4,7 +4,7 @@ Raycasting Engine met Texture Mapping, Deur Support en Pitch
 import pygame
 import math
 from settings import *
-from map import MAP, MAP_WIDTH, MAP_HEIGHT, get_map_value
+from map import get_map_value
 
 
 class RayCaster:
@@ -14,6 +14,9 @@ class RayCaster:
         self.textures = None
         self.door_manager = None
         self.pitch = 0  # Verticale kijkhoek offset
+        self.game_map = None
+        self.map_width = 24
+        self.map_height = 24
         
     def set_textures(self, texture_manager):
         """Stel texture manager in"""
@@ -22,6 +25,13 @@ class RayCaster:
     def set_door_manager(self, door_manager):
         """Stel door manager in"""
         self.door_manager = door_manager
+        
+    def set_map(self, game_map):
+        """Stel de actieve map in"""
+        self.game_map = game_map
+        if game_map:
+            self.map_width = len(game_map[0])
+            self.map_height = len(game_map)
         
     def raycast(self, player):
         """Voer raycasting uit vanuit speler positie"""
@@ -93,8 +103,8 @@ class RayCaster:
             tile_x = int(x_intercept)
             tile_y = int(y_intercept) if sin_a > 0 else int(y_intercept) - 1
             
-            if 0 <= tile_x < MAP_WIDTH and 0 <= tile_y < MAP_HEIGHT:
-                wall_type = get_map_value(tile_x, tile_y)
+            if 0 <= tile_x < self.map_width and 0 <= tile_y < self.map_height:
+                wall_type = get_map_value(tile_x, tile_y, self.game_map)
                 
                 # Check voor deur
                 if wall_type == 9 and self.door_manager:
@@ -150,8 +160,8 @@ class RayCaster:
             tile_x = int(x_intercept) if cos_a > 0 else int(x_intercept) - 1
             tile_y = int(y_intercept)
             
-            if 0 <= tile_x < MAP_WIDTH and 0 <= tile_y < MAP_HEIGHT:
-                wall_type = get_map_value(tile_x, tile_y)
+            if 0 <= tile_x < self.map_width and 0 <= tile_y < self.map_height:
+                wall_type = get_map_value(tile_x, tile_y, self.game_map)
                 
                 # Check voor deur
                 if wall_type == 9 and self.door_manager:

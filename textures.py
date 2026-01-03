@@ -205,6 +205,196 @@ def create_tech_texture(base_color):
     return texture
 
 
+def create_lava_texture():
+    """Maak een lava/vuur textuur - gevaarlijke vloer"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    import random
+    random.seed(666)  # Devil's seed
+    
+    # Base lava color
+    base_color = (180, 60, 20)
+    texture.fill(base_color)
+    
+    # Lava stromen
+    for _ in range(150):
+        x = random.randint(0, TEXTURE_SIZE - 1)
+        y = random.randint(0, TEXTURE_SIZE - 1)
+        size = random.randint(10, 40)
+        
+        # Bright hot spots
+        bright = random.randint(200, 255)
+        hot_color = (bright, bright // 2, 0)
+        pygame.draw.circle(texture, hot_color, (x, y), size)
+    
+    # Donkere korstjes
+    for _ in range(80):
+        x = random.randint(0, TEXTURE_SIZE - 1)
+        y = random.randint(0, TEXTURE_SIZE - 1)
+        size = random.randint(5, 20)
+        dark_color = (60, 20, 10)
+        pygame.draw.circle(texture, dark_color, (x, y), size)
+    
+    # Gloeiende aderen
+    for _ in range(20):
+        start = (random.randint(0, TEXTURE_SIZE), random.randint(0, TEXTURE_SIZE))
+        end = (start[0] + random.randint(-80, 80), start[1] + random.randint(-80, 80))
+        glow = (255, random.randint(150, 200), random.randint(0, 50))
+        pygame.draw.line(texture, glow, start, end, random.randint(2, 6))
+    
+    return texture
+
+
+def create_hell_brick_texture():
+    """Maak een hel-thema baksteen met gloed"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    # Donkere achtergrond
+    mortar_color = (30, 10, 10)
+    texture.fill(mortar_color)
+    
+    brick_height = 32
+    brick_width = 64
+    mortar_size = 4
+    
+    import random
+    random.seed(999)
+    
+    for row in range(TEXTURE_SIZE // brick_height):
+        offset = (brick_width // 2) if row % 2 else 0
+        y = row * brick_height
+        
+        for col in range(-1, TEXTURE_SIZE // brick_width + 1):
+            x = col * brick_width + offset
+            
+            # Donkere rode bakstenen met variatie
+            base_r = random.randint(60, 100)
+            base_g = random.randint(15, 30)
+            base_b = random.randint(10, 25)
+            color = (base_r, base_g, base_b)
+            
+            brick_rect = pygame.Rect(
+                x + mortar_size // 2,
+                y + mortar_size // 2,
+                brick_width - mortar_size,
+                brick_height - mortar_size
+            )
+            pygame.draw.rect(texture, color, brick_rect)
+            
+            # Gloeiende scheuren
+            if random.random() < 0.3:
+                glow = (255, random.randint(80, 150), 0)
+                crack_x = brick_rect.x + random.randint(5, brick_width - 10)
+                crack_y = brick_rect.y + random.randint(2, brick_height - 5)
+                pygame.draw.line(texture, glow, 
+                               (crack_x, crack_y),
+                               (crack_x + random.randint(-15, 15), crack_y + random.randint(-10, 10)), 2)
+    
+    return texture
+
+
+def create_industrial_wall_texture():
+    """Maak een industriële fabrieksmuur textuur"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    # Donkergrijs metaal basis
+    base_color = (70, 75, 80)
+    texture.fill(base_color)
+    
+    # Grote metalen platen
+    plate_color = (85, 90, 95)
+    border_dark = (50, 55, 60)
+    border_light = (100, 105, 110)
+    
+    plate_size = 128
+    for row in range(2):
+        for col in range(2):
+            x = col * plate_size
+            y = row * plate_size
+            
+            # Plaat
+            pygame.draw.rect(texture, plate_color, (x + 4, y + 4, plate_size - 8, plate_size - 8))
+            
+            # 3D effect
+            pygame.draw.line(texture, border_light, (x + 4, y + 4), (x + plate_size - 4, y + 4), 2)
+            pygame.draw.line(texture, border_light, (x + 4, y + 4), (x + 4, y + plate_size - 4), 2)
+            pygame.draw.line(texture, border_dark, (x + plate_size - 4, y + 4), (x + plate_size - 4, y + plate_size - 4), 2)
+            pygame.draw.line(texture, border_dark, (x + 4, y + plate_size - 4), (x + plate_size - 4, y + plate_size - 4), 2)
+    
+    # Rivets in hoeken
+    rivet_color = (60, 65, 70)
+    rivet_highlight = (110, 115, 120)
+    rivet_positions = [
+        (16, 16), (TEXTURE_SIZE - 16, 16),
+        (16, TEXTURE_SIZE - 16), (TEXTURE_SIZE - 16, TEXTURE_SIZE - 16),
+        (TEXTURE_SIZE // 2, 16), (TEXTURE_SIZE // 2, TEXTURE_SIZE - 16),
+        (16, TEXTURE_SIZE // 2), (TEXTURE_SIZE - 16, TEXTURE_SIZE // 2),
+    ]
+    
+    for rx, ry in rivet_positions:
+        pygame.draw.circle(texture, rivet_color, (rx + 1, ry + 1), 6)
+        pygame.draw.circle(texture, rivet_highlight, (rx, ry), 6)
+        pygame.draw.circle(texture, rivet_color, (rx, ry), 4)
+    
+    # Waarschuwingsstrepen
+    warning_y = TEXTURE_SIZE // 2 - 10
+    stripe_width = 20
+    for i in range(0, TEXTURE_SIZE + stripe_width, stripe_width * 2):
+        pygame.draw.polygon(texture, (200, 180, 0), [
+            (i, warning_y),
+            (i + stripe_width, warning_y),
+            (i + stripe_width + 10, warning_y + 20),
+            (i + 10, warning_y + 20)
+        ])
+    
+    return texture
+
+
+def create_rusty_pipe_texture():
+    """Maak een roestige pijp/buis textuur"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    import random
+    random.seed(777)
+    
+    # Basis roestig metaal
+    base_color = (100, 70, 50)
+    texture.fill(base_color)
+    
+    # Verticale pijp
+    pipe_x = TEXTURE_SIZE // 4
+    pipe_width = TEXTURE_SIZE // 2
+    pipe_color = (80, 85, 75)
+    
+    # Pijp basis
+    pygame.draw.rect(texture, pipe_color, (pipe_x, 0, pipe_width, TEXTURE_SIZE))
+    
+    # Highlight aan linkerkant
+    highlight = (110, 115, 105)
+    pygame.draw.rect(texture, highlight, (pipe_x, 0, 10, TEXTURE_SIZE))
+    
+    # Schaduw aan rechterkant
+    shadow = (50, 55, 45)
+    pygame.draw.rect(texture, shadow, (pipe_x + pipe_width - 10, 0, 10, TEXTURE_SIZE))
+    
+    # Roest vlekken
+    for _ in range(30):
+        x = pipe_x + random.randint(10, pipe_width - 20)
+        y = random.randint(0, TEXTURE_SIZE)
+        size = random.randint(3, 12)
+        rust = (random.randint(100, 140), random.randint(50, 70), random.randint(20, 40))
+        pygame.draw.circle(texture, rust, (x, y), size)
+    
+    # Pijp ringen
+    ring_color = (60, 65, 55)
+    ring_highlight = (90, 95, 85)
+    for y in [40, TEXTURE_SIZE // 2, TEXTURE_SIZE - 40]:
+        pygame.draw.rect(texture, ring_color, (pipe_x - 5, y - 8, pipe_width + 10, 16))
+        pygame.draw.line(texture, ring_highlight, (pipe_x - 5, y - 8), (pipe_x + pipe_width + 5, y - 8), 2)
+    
+    return texture
+
+
 def create_tapestry_texture():
     """Maak een wandkleed/tapestry textuur met demonisch patroon"""
     texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
@@ -351,37 +541,92 @@ def create_torch_wall_texture():
 
 
 class TextureManager:
-    """Beheert alle texturen in de game"""
+    """Beheert alle texturen in de game - ondersteunt meerdere thema's"""
     
-    def __init__(self):
+    def __init__(self, theme='dungeon'):
         self.textures = {}
-        self.load_textures()
+        self.theme = theme
+        self.all_themes = {}
+        self.load_all_themes()
+        self.set_theme(theme)
         
-    def load_textures(self):
-        """Laad/genereer alle texturen"""
-        # Standaard rode bakstenen
+    def load_all_themes(self):
+        """Laad texturen voor alle thema's"""
+        # ===========================================
+        # DUNGEON THEME - Klassieke kerker
+        # ===========================================
+        dungeon = {}
         brick_texture = create_brick_texture((150, 50, 50))
-        self.textures[1] = brick_texture
+        dungeon[1] = brick_texture
+        dungeon[2] = create_tapestry_texture()
+        dungeon[3] = create_torch_wall_texture()
+        dungeon[4] = create_stone_texture((70, 65, 60))
+        dungeon[5] = create_metal_texture((80, 85, 90))
+        dungeon[6] = create_stone_texture((50, 50, 60))  # Placeholder
+        dungeon['door'] = create_door_texture()
+        dungeon['door_side'] = brick_texture
+        dungeon['floor_color'] = (40, 35, 30)
+        dungeon['ceiling_color'] = (30, 25, 25)
+        self.all_themes['dungeon'] = dungeon
         
-        # Wandkleed/tapestry muur
-        self.textures[2] = create_tapestry_texture()
+        # ===========================================
+        # INDUSTRIAL THEME - Verlaten fabriek
+        # ===========================================
+        industrial = {}
+        metal_base = create_industrial_wall_texture()
+        industrial[1] = metal_base
+        industrial[2] = create_rusty_pipe_texture()
+        industrial[3] = create_metal_texture((70, 75, 80))
+        industrial[4] = create_industrial_wall_texture()
+        industrial[5] = create_metal_texture((90, 95, 100))
+        industrial[6] = create_stone_texture((60, 60, 65))
+        industrial['door'] = create_metal_door_texture()
+        industrial['door_side'] = metal_base
+        industrial['floor_color'] = (45, 45, 50)
+        industrial['ceiling_color'] = (35, 35, 40)
+        self.all_themes['industrial'] = industrial
         
-        # Fakkel muur
-        self.textures[3] = create_torch_wall_texture()
+        # ===========================================
+        # HELL THEME - Vulkanische onderwereld
+        # ===========================================
+        hell = {}
+        hell_brick = create_hell_brick_texture()
+        hell[1] = hell_brick
+        hell[2] = create_hell_brick_texture()
+        hell[3] = create_torch_wall_texture()  # Re-use torch
+        hell[4] = create_hell_brick_texture()
+        hell[5] = create_stone_texture((50, 30, 30))
+        hell[6] = create_lava_texture()  # LAVA!
+        hell['door'] = create_hell_door_texture()
+        hell['door_side'] = hell_brick
+        hell['floor_color'] = (50, 25, 20)
+        hell['ceiling_color'] = (40, 15, 15)
+        self.all_themes['hell'] = hell
         
-        # Donkere stenen muur
-        self.textures[4] = create_stone_texture((70, 65, 60))
-        
-        # Metalen muur
-        self.textures[5] = create_metal_texture((80, 85, 90))
-        
-        # Deur textuur (smaller, met bakstenen aan zijkanten)
-        self.textures['door'] = create_door_texture()
-        self.textures['door_side'] = brick_texture
-        
-        # Converteer voor snellere rendering
-        for key in self.textures:
-            self.textures[key] = self.textures[key].convert()
+        # Converteer alle texturen voor snellere rendering
+        for theme_name in self.all_themes:
+            for key in self.all_themes[theme_name]:
+                if isinstance(self.all_themes[theme_name][key], pygame.Surface):
+                    self.all_themes[theme_name][key] = self.all_themes[theme_name][key].convert()
+    
+    def set_theme(self, theme):
+        """Wissel naar een ander thema"""
+        if theme in self.all_themes:
+            self.theme = theme
+            self.textures = self.all_themes[theme]
+            print(f"Texture theme set to: {theme}")
+        else:
+            print(f"Unknown theme: {theme}, using dungeon")
+            self.theme = 'dungeon'
+            self.textures = self.all_themes['dungeon']
+            
+    def get_floor_color(self):
+        """Haal vloerkleur op voor huidige thema"""
+        return self.textures.get('floor_color', (40, 35, 30))
+    
+    def get_ceiling_color(self):
+        """Haal plafondkleur op voor huidige thema"""
+        return self.textures.get('ceiling_color', (30, 25, 25))
             
     def get_texture(self, texture_id):
         """Haal een textuur op"""
@@ -415,4 +660,102 @@ class TextureManager:
             return scaled
         
         return None
+
+
+def create_metal_door_texture():
+    """Maak een metalen industriële deur"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    # Achtergrond
+    base = (70, 75, 80)
+    texture.fill(base)
+    
+    # Deur in het midden
+    door_width = TEXTURE_SIZE // 2
+    door_start = TEXTURE_SIZE // 4
+    
+    # Deur plaat
+    door_color = (90, 95, 100)
+    pygame.draw.rect(texture, door_color, (door_start, 0, door_width, TEXTURE_SIZE))
+    
+    # Frame
+    frame_color = (60, 65, 70)
+    pygame.draw.rect(texture, frame_color, (door_start, 0, door_width, TEXTURE_SIZE), 8)
+    
+    # Waarschuwingsstrepen
+    warning_color = (200, 180, 0)
+    black = (30, 30, 30)
+    stripe_height = 30
+    y_pos = TEXTURE_SIZE - stripe_height - 20
+    
+    for i in range(door_start, door_start + door_width, 20):
+        pygame.draw.polygon(texture, warning_color, [
+            (i, y_pos),
+            (i + 10, y_pos),
+            (i + 20, y_pos + stripe_height),
+            (i + 10, y_pos + stripe_height)
+        ])
+    
+    # Hendel
+    handle_color = (120, 125, 130)
+    pygame.draw.rect(texture, handle_color, (door_start + door_width - 30, TEXTURE_SIZE // 2 - 20, 15, 40))
+    pygame.draw.circle(texture, (80, 85, 90), (door_start + door_width - 22, TEXTURE_SIZE // 2), 8)
+    
+    # Ventilatierooster
+    vent_color = (40, 45, 50)
+    vent_y = 40
+    for i in range(6):
+        pygame.draw.rect(texture, vent_color, (door_start + 20, vent_y + i * 12, door_width - 40, 6))
+    
+    return texture
+
+
+def create_hell_door_texture():
+    """Maak een helse deur met gloeiende symbolen"""
+    texture = pygame.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+    
+    # Achtergrond donker
+    base = (40, 15, 15)
+    texture.fill(base)
+    
+    # Deur in het midden
+    door_width = TEXTURE_SIZE // 2
+    door_start = TEXTURE_SIZE // 4
+    
+    # Deur basis - donker hout/metaal
+    door_color = (60, 25, 20)
+    pygame.draw.rect(texture, door_color, (door_start, 0, door_width, TEXTURE_SIZE))
+    
+    # Frame met gloed
+    frame_glow = (150, 50, 30)
+    pygame.draw.rect(texture, frame_glow, (door_start, 0, door_width, TEXTURE_SIZE), 10)
+    
+    # Gloeiend symbool in midden
+    import math
+    center_x = TEXTURE_SIZE // 2
+    center_y = TEXTURE_SIZE // 2
+    
+    # Pentagram
+    glow_color = (255, 100, 50)
+    points = []
+    for i in range(5):
+        angle = math.radians(-90 + i * 72)
+        points.append((center_x + 50 * math.cos(angle), center_y + 50 * math.sin(angle)))
+    
+    # Verbind punten voor ster
+    for i in range(5):
+        pygame.draw.line(texture, glow_color, points[i], points[(i + 2) % 5], 4)
+    
+    # Centrale gloed
+    pygame.draw.circle(texture, (200, 80, 40), (center_x, center_y), 15)
+    pygame.draw.circle(texture, (255, 150, 50), (center_x, center_y), 8)
+    
+    # Spijkers/decoratie
+    spike_color = (100, 40, 30)
+    for y in [30, TEXTURE_SIZE - 30]:
+        for x_off in [20, door_width - 20]:
+            pygame.draw.circle(texture, spike_color, (door_start + x_off, y), 8)
+            pygame.draw.circle(texture, glow_color, (door_start + x_off, y), 4)
+    
+    return texture
 

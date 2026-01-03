@@ -468,3 +468,8 @@ class WeaponManager:
     def render(self, screen):
         if not self.switching:
             self.current.render(screen)
+            
+    def add_ammo_all(self, amount):
+        """Voeg ammo toe aan alle wapens"""
+        for weapon in self.weapons:
+            weapon.ammo += amount
