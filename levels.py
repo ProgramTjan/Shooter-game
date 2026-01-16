@@ -65,6 +65,11 @@ LEVEL_1_DATA = {
     'has_quest': True,
     'has_boss': False,
     'player_start': (2.5, 1.5),
+    'bot': {
+        'position': (3.5, 1.5),
+        'message': "Collect crystals, find the key, open the exit.",
+        'help': {'health': 20, 'ammo': 30, 'health_packs': 0},
+    },
     # Minder vijanden, maar sterker
     'enemy_positions': [
         (2.5, 2.5), (21.5, 2.5),
@@ -142,6 +147,11 @@ LEVEL_2_DATA = {
     'has_boss': True,
     'boss_only': True,  # Alleen de boss, geen minions
     'player_start': (2.5, 2.5),
+    'bot': {
+        'position': (3.5, 2.5),
+        'message': "Keep moving; the Demon Lord's fireballs track you.",
+        'help': {'health': 30, 'ammo': 45, 'health_packs': 1},
+    },
     'boss_position': (11.5, 11.5),
     'enemy_positions': [],  # Geen andere vijanden
     'health_pack_positions': [
@@ -210,6 +220,11 @@ LEVEL_3_DATA = {
     'has_quest': True,
     'has_boss': False,
     'player_start': (1.5, 1.5),
+    'bot': {
+        'position': (2.5, 1.5),
+        'message': "Key is in the east wing. Watch the corners.",
+        'help': {'health': 25, 'ammo': 35, 'health_packs': 0},
+    },
     # Minder vijanden, maar sterker
     'enemy_positions': [
         (4.5, 2.5), (19.5, 2.5),
@@ -290,6 +305,11 @@ LEVEL_4_DATA = {
     'has_quest': True,
     'has_boss': False,
     'player_start': (1.5, 1.5),
+    'bot': {
+        'position': (2.5, 1.5),
+        'message': "Avoid lava rooms; stick to the corridors.",
+        'help': {'health': 30, 'ammo': 40, 'health_packs': 0},
+    },
     # Minder maar sterkere vijanden in de hel
     'enemy_positions': [
         (6.5, 1.5), (17.5, 1.5),
@@ -374,6 +394,11 @@ LEVEL_5_DATA = {
     'boss_only': True,  # Alleen de finale boss
     'is_final_boss': True,
     'player_start': (11.5, 21.5),
+    'bot': {
+        'position': (13.5, 21.5),
+        'message': "Circle the throne room and keep distance.",
+        'help': {'health': 35, 'ammo': 50, 'health_packs': 1},
+    },
     'boss_position': (11.5, 5.5),
     'enemy_positions': [],  # Geen andere vijanden - alleen de BOSS
     'health_pack_positions': [

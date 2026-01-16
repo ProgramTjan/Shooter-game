@@ -35,6 +35,7 @@ from enemy import EnemyManager
 from weapon import WeaponManager
 from map import MINIMAP_TILE_SIZE
 from quest import QuestManager
+from friendly_bot import FriendlyBotManager
 from levels import get_level_data, get_total_levels
 
 
@@ -50,6 +51,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.running = True
         self.show_minimap = True
+        self.friendly_bot_manager = None
         
         # Level systeem
         self.current_level = 1
@@ -103,6 +105,11 @@ class Game:
         self.damage_flash_time = 0
         self.kill_text = ""
         self.kill_text_time = 0
+        
+        # Friendly bot notifications
+        self.bot_notification_text = ""
+        self.bot_notification_time = 0
+        self.bot_notification_duration = 4000
         
         # Game state
         self.game_over = False
@@ -195,6 +202,12 @@ class Game:
                 ammo_pack_positions=ammo_pack_positions,
                 is_boss_level=True
             )
+            
+        # Friendly help bot
+        bot_data = self.level_data.get('bot', None)
+        self.friendly_bot_manager = FriendlyBotManager(bot_data, level_num)
+        self.bot_notification_text = ""
+        self.bot_notification_time = 0
             
         # Reset muis
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
@@ -372,6 +385,11 @@ class Game:
             return (255, 80, 50)
         else:  # dungeon
             return (180, 100, 255)
+
+    def show_bot_message(self, text):
+        """Toon een bot notificatie"""
+        self.bot_notification_text = text
+        self.bot_notification_time = pygame.time.get_ticks()
         
     def handle_events(self):
         """Verwerk input events"""
@@ -512,6 +530,10 @@ class Game:
         
         # Update quest en health packs
         self.quest.update(dt, self.player, self.enemy_manager)
+        
+        # Update friendly bot
+        if self.friendly_bot_manager:
+            self.friendly_bot_manager.update(dt, self.player, self)
         
         # Check health pack pickup (automatisch oppakken)
         picked_up = self.quest.try_pickup_health_pack(self.player.x, self.player.y)
@@ -678,6 +700,10 @@ class Game:
                     pygame.draw.circle(self.screen, (255, 100, 0), (int(ex), int(ey)), 5)
                 else:
                     pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 2)
+        
+        # Teken friendly bots op minimap
+        if self.friendly_bot_manager:
+            self.friendly_bot_manager.draw_minimap(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
                     
         # Teken crystals, items, key en exit deur op minimap
         self.quest.draw_minimap_crystals(self.screen, offset_x, offset_y, MINIMAP_TILE_SIZE)
@@ -809,6 +835,19 @@ class Game:
             kill_rect = kill_surf.get_rect(center=(HALF_WIDTH, 100))
             self.screen.blit(kill_surf, kill_rect)
             
+        # Friendly bot notification
+        if self.bot_notification_text and current_time - self.bot_notification_time < self.bot_notification_duration:
+            bot_color = (120, 220, 255)
+            bot_surf = self.small_font.render(self.bot_notification_text, True, bot_color)
+            bot_rect = bot_surf.get_rect(center=(HALF_WIDTH, 140))
+            
+            bg_rect = pygame.Rect(bot_rect.x - 12, bot_rect.y - 6, bot_rect.width + 24, bot_rect.height + 12)
+            bg = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
+            bg.fill((10, 30, 40, 180))
+            pygame.draw.rect(bg, (60, 180, 220, 220), (0, 0, bg_rect.width, bg_rect.height), 2)
+            self.screen.blit(bg, (bg_rect.x, bg_rect.y))
+            self.screen.blit(bot_surf, bot_rect)
+            
         # Controls hint
         hint_text = self.small_font.render("[MOUSE] Look  [1/2/3] Weapon  [SPACE] Shoot  [E] Door", True, (120, 120, 120))
         self.screen.blit(hint_text, (WIDTH - 400, HEIGHT - 25))
@@ -885,6 +924,8 @@ class Game:
         # Render sprites (vijanden, crystals en health packs)
         self.sprite_renderer.clear()
         self.enemy_manager.render(self.sprite_renderer)
+        if self.friendly_bot_manager:
+            self.friendly_bot_manager.render(self.sprite_renderer)
         
         # Render crystals, key, exit door alleen voor quest levels
         if self.level_data.get('has_quest', False):
