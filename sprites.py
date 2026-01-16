@@ -512,6 +512,76 @@ def create_hurt_enemy_sprite(size=64):
     return sprite
 
 
+def create_friendly_bot_sprite(size=64, active=True):
+    """Maak een vriendelijke hulp-bot sprite"""
+    sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+    s = size / 64
+    cx = size // 2
+    
+    # Kleuren
+    body_color = (70, 130, 190) if active else (80, 80, 80)
+    body_shadow = (50, 90, 130) if active else (60, 60, 60)
+    accent = (120, 200, 255) if active else (120, 120, 120)
+    eye_color = (80, 255, 200) if active else (120, 120, 120)
+    
+    # Schaduw / hover ring
+    shadow_w = int(36 * s)
+    shadow_h = int(10 * s)
+    pygame.draw.ellipse(sprite, (0, 0, 0, 120), (cx - shadow_w // 2, int(52 * s), shadow_w, shadow_h))
+    
+    # Body
+    body_w = int(32 * s)
+    body_h = int(24 * s)
+    body_x = cx - body_w // 2
+    body_y = int(30 * s)
+    pygame.draw.rect(sprite, body_color, (body_x, body_y, body_w, body_h), border_radius=int(6 * s))
+    inner_pad = int(3 * s)
+    pygame.draw.rect(sprite, body_shadow,
+                     (body_x + inner_pad, body_y + inner_pad, body_w - inner_pad * 2, body_h - inner_pad * 2),
+                     border_radius=int(5 * s))
+    
+    # Head
+    head_w = int(26 * s)
+    head_h = int(16 * s)
+    head_x = cx - head_w // 2
+    head_y = int(12 * s)
+    pygame.draw.rect(sprite, body_color, (head_x, head_y, head_w, head_h), border_radius=int(6 * s))
+    pygame.draw.rect(sprite, accent, (head_x + int(2 * s), head_y + int(2 * s),
+                                     head_w - int(4 * s), head_h - int(4 * s)),
+                     width=0, border_radius=int(4 * s))
+    
+    # Ogen
+    eye_y = head_y + int(7 * s)
+    eye_offset = int(6 * s)
+    pygame.draw.circle(sprite, eye_color, (cx - eye_offset, eye_y), int(2 * s))
+    pygame.draw.circle(sprite, eye_color, (cx + eye_offset, eye_y), int(2 * s))
+    
+    # Antenne
+    antenna_y = head_y - int(6 * s)
+    pygame.draw.line(sprite, accent, (cx, head_y), (cx, antenna_y), max(1, int(2 * s)))
+    pygame.draw.circle(sprite, accent, (cx, antenna_y), int(3 * s))
+    
+    # Paneel op body
+    panel_w = int(14 * s)
+    panel_h = int(10 * s)
+    panel_x = cx - panel_w // 2
+    panel_y = body_y + int(6 * s)
+    pygame.draw.rect(sprite, accent, (panel_x, panel_y, panel_w, panel_h), border_radius=int(3 * s))
+    pygame.draw.line(sprite, body_color,
+                    (panel_x + panel_w // 2, panel_y + int(2 * s)),
+                    (panel_x + panel_w // 2, panel_y + panel_h - int(2 * s)), max(1, int(2 * s)))
+    pygame.draw.line(sprite, body_color,
+                    (panel_x + int(3 * s), panel_y + panel_h // 2),
+                    (panel_x + panel_w - int(3 * s), panel_y + panel_h // 2), max(1, int(2 * s)))
+    
+    return sprite
+
+
+def create_friendly_bot_used_sprite(size=64):
+    """Maak een gedeactiveerde hulp-bot sprite"""
+    return create_friendly_bot_sprite(size=size, active=False)
+
+
 class SpriteRenderer:
     """Rendert sprites in de 3D wereld"""
     
