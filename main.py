@@ -427,6 +427,9 @@ class Game:
                     self.weapons.next_weapon()
                 elif event.key == pygame.K_h:
                     self.use_health_pack()
+                elif event.key == pygame.K_i:
+                    if self.friendly_bot_manager:
+                        self.friendly_bot_manager.try_interact(self.player, self)
                     
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click

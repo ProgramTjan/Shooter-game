@@ -29,12 +29,14 @@ class FriendlyBot:
         self.float_phase = (x + y) * 0.6
         
     def update(self, dt, player, game):
-        """Update animatie en help check"""
+        """Update animatie"""
         self.float_offset = math.sin(pygame.time.get_ticks() * 0.003 + self.float_phase) * 0.12
         
+    def try_interact(self, player, game):
+        """Probeer te interacteren met de bot"""
         if self.helped:
-            return
-            
+            return False
+        
         dx = player.x - self.x
         dy = player.y - self.y
         distance = math.sqrt(dx*dx + dy*dy)
@@ -42,6 +44,9 @@ class FriendlyBot:
         if distance < self.activation_range:
             self.helped = True
             self._apply_help(game)
+            return True
+            
+        return False
             
     def _apply_help(self, game):
         """Geef hulp aan speler"""
@@ -109,7 +114,13 @@ class FriendlyBotManager:
     def render(self, sprite_renderer):
         for bot in self.bots:
             sprite = bot.get_sprite()
-            sprite_renderer.add_sprite(sprite, bot.x, bot.y + bot.float_offset, 0.35)
+            sprite_renderer.add_sprite(sprite, bot.x, bot.y + bot.float_offset, 0.35, 0.25)
+            
+    def try_interact(self, player, game):
+        for bot in self.bots:
+            if bot.try_interact(player, game):
+                return True
+        return False
             
     def draw_minimap(self, screen, offset_x, offset_y, tile_size):
         for bot in self.bots:
