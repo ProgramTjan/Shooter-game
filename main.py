@@ -106,10 +106,12 @@ class Game:
         self.kill_text = ""
         self.kill_text_time = 0
         
-        # Friendly bot notifications
-        self.bot_notification_text = ""
-        self.bot_notification_time = 0
-        self.bot_notification_duration = 4000
+        # Friendly bot dialogue system
+        self.bot_dialogue_active = False
+        self.bot_dialogue_message = ""
+        self.bot_dialogue_bonus = ""
+        self.bot_dialogue_start_time = 0
+        self.bot_dialogue_duration = 5000  # 5 seconden zichtbaar
         
         # Game state
         self.game_over = False
@@ -206,8 +208,9 @@ class Game:
         # Friendly help bot
         bot_data = self.level_data.get('bot', None)
         self.friendly_bot_manager = FriendlyBotManager(bot_data, level_num)
-        self.bot_notification_text = ""
-        self.bot_notification_time = 0
+        self.bot_dialogue_active = False
+        self.bot_dialogue_message = ""
+        self.bot_dialogue_bonus = ""
             
         # Reset muis
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
@@ -386,10 +389,12 @@ class Game:
         else:  # dungeon
             return (180, 100, 255)
 
-    def show_bot_message(self, text):
-        """Toon een bot notificatie"""
-        self.bot_notification_text = text
-        self.bot_notification_time = pygame.time.get_ticks()
+    def show_bot_dialogue(self, message, bonus_text=""):
+        """Toon een prominente bot dialoog"""
+        self.bot_dialogue_active = True
+        self.bot_dialogue_message = message
+        self.bot_dialogue_bonus = bonus_text
+        self.bot_dialogue_start_time = pygame.time.get_ticks()
         
     def handle_events(self):
         """Verwerk input events"""
@@ -414,6 +419,9 @@ class Game:
                 elif event.key == pygame.K_m:
                     self.show_minimap = not self.show_minimap
                 elif event.key == pygame.K_e:
+                    # Probeer eerst bot interactie, dan deur
+                    if self.friendly_bot_manager:
+                        self.friendly_bot_manager.try_interact(self)
                     self.door_manager.interact(self.player.x, self.player.y, self.player.angle)
                 elif event.key == pygame.K_SPACE:
                     self.shoot()
@@ -536,7 +544,7 @@ class Game:
         
         # Update friendly bot
         if self.friendly_bot_manager:
-            self.friendly_bot_manager.update(dt, self.player, self)
+            self.friendly_bot_manager.update(dt, self.player)
         
         # Check health pack pickup (automatisch oppakken)
         picked_up = self.quest.try_pickup_health_pack(self.player.x, self.player.y)
@@ -729,6 +737,61 @@ class Game:
         pygame.draw.line(self.screen, (255, 255, 0),
                         (player_x, player_y), (end_x, end_y), 2)
         
+    def _draw_bot_dialogue(self, elapsed):
+        """Teken prominente bot dialoog in het midden van het scherm"""
+        # Fade in/out
+        fade_duration = 500
+        if elapsed < fade_duration:
+            alpha = int(255 * (elapsed / fade_duration))
+        elif elapsed > self.bot_dialogue_duration - fade_duration:
+            alpha = int(255 * ((self.bot_dialogue_duration - elapsed) / fade_duration))
+        else:
+            alpha = 255
+            
+        # Grote semi-transparante achtergrond
+        dialogue_width = 700
+        dialogue_height = 180
+        dialogue_x = HALF_WIDTH - dialogue_width // 2
+        dialogue_y = HALF_HEIGHT - 50
+        
+        # Achtergrond
+        bg_surface = pygame.Surface((dialogue_width, dialogue_height), pygame.SRCALPHA)
+        bg_surface.fill((5, 15, 25, int(alpha * 0.9)))
+        
+        # Glow border
+        glow_color = (80, 200, 255)
+        pygame.draw.rect(bg_surface, (*glow_color, alpha), (0, 0, dialogue_width, dialogue_height), 4, border_radius=12)
+        pygame.draw.rect(bg_surface, (glow_color[0]//2, glow_color[1]//2, glow_color[2]//2, alpha//2), 
+                        (4, 4, dialogue_width-8, dialogue_height-8), 2, border_radius=10)
+        
+        self.screen.blit(bg_surface, (dialogue_x, dialogue_y))
+        
+        # Bot icoon/naam
+        bot_label = self.font.render("FRIENDLY BOT", True, glow_color)
+        bot_label.set_alpha(alpha)
+        label_rect = bot_label.get_rect(center=(HALF_WIDTH, dialogue_y + 30))
+        self.screen.blit(bot_label, label_rect)
+        
+        # Horizontale lijn
+        line_y = dialogue_y + 55
+        line_surface = pygame.Surface((dialogue_width - 60, 2), pygame.SRCALPHA)
+        line_surface.fill((*glow_color, alpha//2))
+        self.screen.blit(line_surface, (dialogue_x + 30, line_y))
+        
+        # Hoofdbericht
+        message_surf = self.font.render(self.bot_dialogue_message, True, (255, 255, 255))
+        message_surf.set_alpha(alpha)
+        message_rect = message_surf.get_rect(center=(HALF_WIDTH, dialogue_y + 90))
+        self.screen.blit(message_surf, message_rect)
+        
+        # Bonus tekst (groter en opvallender)
+        if self.bot_dialogue_bonus:
+            bonus_color = (100, 255, 100)  # Groen voor bonussen
+            bonus_surf = self.title_font.render(self.bot_dialogue_bonus, True, bonus_color)
+            bonus_surf.set_alpha(alpha)
+            bonus_rect = bonus_surf.get_rect(center=(HALF_WIDTH, dialogue_y + 140))
+            self.screen.blit(bonus_surf, bonus_rect)
+            
     def draw_hud(self):
         """Teken HUD elementen"""
         current_time = pygame.time.get_ticks()
@@ -838,22 +901,21 @@ class Game:
             kill_rect = kill_surf.get_rect(center=(HALF_WIDTH, 100))
             self.screen.blit(kill_surf, kill_rect)
             
-        # Friendly bot notification
-        if self.bot_notification_text and current_time - self.bot_notification_time < self.bot_notification_duration:
-            bot_color = (120, 220, 255)
-            bot_surf = self.small_font.render(self.bot_notification_text, True, bot_color)
-            bot_rect = bot_surf.get_rect(center=(HALF_WIDTH, 140))
+        # Friendly bot interact prompt (when near bot)
+        if self.friendly_bot_manager and not self.bot_dialogue_active:
+            self.friendly_bot_manager.draw_interact_prompt(self.screen, self.font)
             
-            bg_rect = pygame.Rect(bot_rect.x - 12, bot_rect.y - 6, bot_rect.width + 24, bot_rect.height + 12)
-            bg = pygame.Surface((bg_rect.width, bg_rect.height), pygame.SRCALPHA)
-            bg.fill((10, 30, 40, 180))
-            pygame.draw.rect(bg, (60, 180, 220, 220), (0, 0, bg_rect.width, bg_rect.height), 2)
-            self.screen.blit(bg, (bg_rect.x, bg_rect.y))
-            self.screen.blit(bot_surf, bot_rect)
+        # Friendly bot dialogue (prominent display)
+        if self.bot_dialogue_active:
+            elapsed = current_time - self.bot_dialogue_start_time
+            if elapsed < self.bot_dialogue_duration:
+                self._draw_bot_dialogue(elapsed)
+            else:
+                self.bot_dialogue_active = False
             
         # Controls hint
-        hint_text = self.small_font.render("[MOUSE] Look  [1/2/3] Weapon  [SPACE] Shoot  [E] Door", True, (120, 120, 120))
-        self.screen.blit(hint_text, (WIDTH - 400, HEIGHT - 25))
+        hint_text = self.small_font.render("[WASD] Move  [1/2/3] Weapon  [E] Interact  [H] Heal", True, (120, 120, 120))
+        self.screen.blit(hint_text, (WIDTH - 380, HEIGHT - 25))
         
     def draw_damage_flash(self):
         """Teken rood flash als speler geraakt wordt"""
