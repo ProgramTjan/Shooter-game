@@ -16,7 +16,7 @@ FPS = 60
 # Speler instellingen
 PLAYER_POS = (2.5, 1.5)  # Start positie (linksboven)
 PLAYER_ANGLE = 0
-PLAYER_SPEED = 0.004
+PLAYER_SPEED = 0.0032
 PLAYER_ROT_SPEED = 0.002
 PLAYER_SIZE_SCALE = 60
 

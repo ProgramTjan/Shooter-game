@@ -80,11 +80,11 @@ class Enemy:
     
     # Minder vijanden maar sterker - meer health, meer damage
     ENEMY_TYPES = [
-        {'color': 'red', 'health': 120, 'speed': 0.0015, 'damage': 12, 'fire_rate': 1500},
-        {'color': 'green', 'health': 150, 'speed': 0.0012, 'damage': 18, 'fire_rate': 2000},
-        {'color': 'blue', 'health': 90, 'speed': 0.0022, 'damage': 10, 'fire_rate': 1200},
-        {'color': 'purple', 'health': 180, 'speed': 0.001, 'damage': 22, 'fire_rate': 2500},
-        {'color': 'orange', 'health': 100, 'speed': 0.0018, 'damage': 15, 'fire_rate': 1300},
+        {'color': 'red', 'health': 120, 'speed': 0.0012, 'damage': 12, 'fire_rate': 1500},
+        {'color': 'green', 'health': 150, 'speed': 0.00096, 'damage': 18, 'fire_rate': 2000},
+        {'color': 'blue', 'health': 90, 'speed': 0.00176, 'damage': 10, 'fire_rate': 1200},
+        {'color': 'purple', 'health': 180, 'speed': 0.0008, 'damage': 22, 'fire_rate': 2500},
+        {'color': 'orange', 'health': 100, 'speed': 0.00144, 'damage': 15, 'fire_rate': 1300},
     ]
     
     # Kogel kleuren per vijand type
@@ -422,14 +422,14 @@ class Boss(Enemy):
         if is_final:
             self.health = 800
             self.max_health = 800
-            self.speed = 0.0012
+            self.speed = 0.00096
             self.damage = 30
             self.projectile_damage = 35
             self.projectile_speed = 0.035  # Zeer snelle vuurballen
         else:
             self.health = 500
             self.max_health = 500
-            self.speed = 0.001
+            self.speed = 0.0008
             self.damage = 25
             self.projectile_damage = 25
             self.projectile_speed = 0.028  # Snelle vuurballen
