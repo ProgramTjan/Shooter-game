@@ -32,7 +32,7 @@ from raycasting import RayCaster
 from textures import TextureManager
 from door import DoorManager
 from sprites import SpriteRenderer
-from enemy import EnemyManager
+from enemy import EnemyManager, EnemyState
 from weapon import WeaponManager
 from map import MINIMAP_TILE_SIZE
 from quest import QuestManager
@@ -729,16 +729,26 @@ class Game:
                                     MINIMAP_TILE_SIZE - 1,
                                     MINIMAP_TILE_SIZE - 1))
         
-        # Teken vijanden op minimap
+        # Teken vijanden op minimap met state-gebaseerde kleuren
         for enemy in self.enemy_manager.enemies:
-            if enemy.alive:
-                ex = offset_x + enemy.x * MINIMAP_TILE_SIZE
-                ey = offset_y + enemy.y * MINIMAP_TILE_SIZE
-                # Boss is groter en anders gekleurd
-                if hasattr(enemy, 'is_boss'):
-                    pygame.draw.circle(self.screen, (255, 100, 0), (int(ex), int(ey)), 5)
-                else:
-                    pygame.draw.circle(self.screen, (255, 0, 0), (int(ex), int(ey)), 2)
+            color = enemy.get_minimap_color()
+            if color is None:
+                continue
+                
+            ex = offset_x + enemy.x * MINIMAP_TILE_SIZE
+            ey = offset_y + enemy.y * MINIMAP_TILE_SIZE
+            
+            # Boss is groter
+            if hasattr(enemy, 'is_boss'):
+                pygame.draw.circle(self.screen, color, (int(ex), int(ey)), 5)
+                # Glow effect voor rage mode
+                if hasattr(enemy, 'rage_mode') and enemy.rage_mode:
+                    pygame.draw.circle(self.screen, (255, 150, 0), (int(ex), int(ey)), 7, 2)
+            else:
+                # Grotere cirkel voor actieve vijanden
+                active_states = [EnemyState.CHASE, EnemyState.ATTACK, EnemyState.ALERT]
+                size = 3 if enemy.state in active_states else 2
+                pygame.draw.circle(self.screen, color, (int(ex), int(ey)), size)
         
         # Teken friendly bots op minimap
         if self.friendly_bot_manager:

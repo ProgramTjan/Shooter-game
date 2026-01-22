@@ -794,6 +794,84 @@ class Enemy:
             
         return base_sprite
         
+    def get_sprite_with_health_bar(self):
+        """Haal sprite op met health bar als beschadigd"""
+        base = self.get_sprite()
+        
+        # Geen health bar voor dode vijanden of vol health
+        if self.state in [EnemyState.DEAD, EnemyState.DYING]:
+            return base
+        if self.health >= self.max_health:
+            return base
+            
+        # Maak kopie met health bar
+        width = base.get_width()
+        height = base.get_height()
+        
+        # Extra ruimte voor health bar boven sprite
+        bar_height = 6
+        bar_margin = 4
+        new_height = height + bar_height + bar_margin
+        
+        result = pygame.Surface((width, new_height), pygame.SRCALPHA)
+        result.blit(base, (0, bar_height + bar_margin))
+        
+        # Health bar
+        bar_width = width - 10
+        bar_x = 5
+        bar_y = 2
+        
+        # Background
+        pygame.draw.rect(result, (40, 40, 40), (bar_x, bar_y, bar_width, bar_height))
+        
+        # Health fill
+        health_pct = self.health / self.max_health
+        fill_width = int(bar_width * health_pct)
+        
+        # Kleur op basis van health
+        if health_pct > 0.6:
+            bar_color = (50, 200, 50)
+        elif health_pct > 0.3:
+            bar_color = (200, 200, 50)
+        else:
+            bar_color = (200, 50, 50)
+            
+        pygame.draw.rect(result, bar_color, (bar_x, bar_y, fill_width, bar_height))
+        
+        # Border
+        pygame.draw.rect(result, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height), 1)
+        
+        return result
+        
+    def get_minimap_color(self):
+        """Geef kleur voor minimap gebaseerd op state en behavior"""
+        if self.state in [EnemyState.DEAD, EnemyState.DYING]:
+            return None  # Niet tekenen
+            
+        # Basis kleur per behavior type
+        if self.behavior == BehaviorType.CHARGER:
+            base_color = (100, 150, 255)  # Blauw voor chargers
+        elif self.behavior == BehaviorType.DODGER:
+            base_color = (200, 100, 255)  # Paars voor dodgers
+        else:
+            base_color = (255, 100, 100)  # Rood voor ranged
+            
+        # Modifier per state
+        if self.state == EnemyState.ALERT:
+            # Geel voor alert
+            return (255, 255, 100)
+        elif self.state == EnemyState.CHASE or self.state == EnemyState.ATTACK:
+            # Oranje voor actief agressief
+            return (255, 150, 50)
+        elif self.state == EnemyState.PATROL:
+            # Donkerder voor patrol
+            return tuple(max(0, c - 80) for c in base_color)
+        elif self.state == EnemyState.IDLE:
+            # Nog donkerder voor idle
+            return tuple(max(0, c - 100) for c in base_color)
+            
+        return base_color
+        
     @property
     def pos(self):
         return (self.x, self.y)
@@ -1058,6 +1136,56 @@ class Boss(Enemy):
             return rage_sprite
             
         return base_sprite
+        
+    def get_sprite_with_health_bar(self):
+        """Boss sprite met grote health bar"""
+        base = self.get_sprite()
+        
+        if self.state in [EnemyState.DEAD, EnemyState.DYING]:
+            return base
+        if self.health >= self.max_health:
+            return base
+            
+        width = base.get_width()
+        height = base.get_height()
+        
+        bar_height = 10  # Grotere bar voor boss
+        bar_margin = 6
+        new_height = height + bar_height + bar_margin
+        
+        result = pygame.Surface((width, new_height), pygame.SRCALPHA)
+        result.blit(base, (0, bar_height + bar_margin))
+        
+        bar_width = width - 16
+        bar_x = 8
+        bar_y = 2
+        
+        pygame.draw.rect(result, (40, 20, 20), (bar_x, bar_y, bar_width, bar_height))
+        
+        health_pct = self.health / self.max_health
+        fill_width = int(bar_width * health_pct)
+        
+        # Boss health bar kleur - rood/oranje
+        if self.rage_mode:
+            bar_color = (255, 100, 0)  # Oranje in rage
+        elif health_pct > 0.5:
+            bar_color = (200, 50, 50)
+        else:
+            bar_color = (255, 50, 50)
+            
+        pygame.draw.rect(result, bar_color, (bar_x, bar_y, fill_width, bar_height))
+        pygame.draw.rect(result, (150, 50, 50), (bar_x, bar_y, bar_width, bar_height), 2)
+        
+        return result
+        
+    def get_minimap_color(self):
+        """Boss minimap kleur"""
+        if self.state in [EnemyState.DEAD, EnemyState.DYING]:
+            return None
+            
+        if self.rage_mode:
+            return (255, 100, 0)  # Oranje in rage
+        return (255, 50, 50)  # Rood
 
 
 class DamageNumber:
@@ -1227,17 +1355,18 @@ class EnemyManager:
         return damage
         
     def render(self, sprite_renderer):
-        """Render alle vijanden"""
+        """Render alle vijanden met health bars"""
         for enemy in self.enemies:
             if enemy.state == EnemyState.DEAD:
                 continue
                 
-            sprite = enemy.get_sprite()
+            # Gebruik sprite met health bar voor beschadigde vijanden
+            sprite = enemy.get_sprite_with_health_bar()
             
             if hasattr(enemy, 'is_boss'):
                 if enemy.state != EnemyState.DYING:
                     scale = 0.6
-                    y_offset = 0.35
+                    y_offset = 0.30  # Iets hoger voor health bar
                 else:
                     scale = 0.4
                     y_offset = 0.5
@@ -1252,7 +1381,7 @@ class EnemyManager:
             else:
                 if enemy.state != EnemyState.DYING:
                     scale = 0.3
-                    y_offset = 0.25
+                    y_offset = 0.20  # Iets hoger voor health bar
                 else:
                     scale = 0.2
                     y_offset = 0.4
