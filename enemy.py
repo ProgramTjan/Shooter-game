@@ -749,6 +749,37 @@ class Enemy:
             # Stagger
             self._change_state(EnemyState.HURT)
             return False
+            
+    def get_drop(self):
+        """Genereer een drop bij dood"""
+        # Bepaal drop type met kansen
+        roll = random.random()
+        
+        if roll < 0.10:  # 10% health pack
+            return EnemyDrop(self.x, self.y, 'health_pack')
+        elif roll < 0.35:  # 25% health
+            return EnemyDrop(self.x, self.y, 'health')
+        elif roll < 0.70:  # 35% ammo
+            return EnemyDrop(self.x, self.y, 'ammo')
+        else:
+            return None  # 30% geen drop
+            
+    def apply_difficulty_scaling(self, level):
+        """Pas difficulty scaling toe gebaseerd op level"""
+        # Elke level verhoogt stats
+        scaling = 1.0 + (level - 1) * 0.15  # 15% per level
+        
+        self.health = int(self.health * scaling)
+        self.max_health = int(self.max_health * scaling)
+        self.damage = int(self.damage * scaling)
+        
+        # Speed scaling is minder agressief
+        speed_scaling = 1.0 + (level - 1) * 0.08  # 8% per level
+        self.speed = self.base_speed * speed_scaling
+        
+        # Fire rate wordt sneller (lager getal)
+        if self.fire_rate > 0:
+            self.fire_rate = int(self.fire_rate / (1 + (level - 1) * 0.1))
         
     def get_sprite(self):
         """Haal huidige sprite op met effecten"""
@@ -955,7 +986,10 @@ class Projectile:
 
 
 class Boss(Enemy):
-    """De eindbaas - verbeterde versie met betere aanvallen"""
+    """De eindbaas - verbeterde versie met fases en betere aanvallen"""
+    
+    # Boss fases met verschillende gedragingen
+    PHASE_THRESHOLDS = [0.75, 0.50, 0.25]  # Health percentages voor fase transitions
     
     def __init__(self, x, y, is_final=False):
         super().__init__(x, y)
@@ -967,14 +1001,16 @@ class Boss(Enemy):
         if is_final:
             self.health = 800
             self.max_health = 800
-            self.speed = 0.00096
+            self.base_speed = 0.00096
+            self.speed = self.base_speed
             self.damage = 30
             self.projectile_damage = 35
             self.projectile_speed = 0.035
         else:
             self.health = 500
             self.max_health = 500
-            self.speed = 0.0008
+            self.base_speed = 0.0008
+            self.speed = self.base_speed
             self.damage = 25
             self.projectile_damage = 25
             self.projectile_speed = 0.028
@@ -999,13 +1035,29 @@ class Boss(Enemy):
         self.sprite_hurt = create_hurt_enemy_sprite(128)
         self.sprite_dead = create_dead_boss_sprite()
         
-        # Rage mode
+        # Fase systeem
+        self.current_phase = 1
+        self.phase_transition_timer = 0
+        self.is_transitioning = False
+        
+        # Rage mode (fase 4)
         self.rage_mode = False
         self.rage_threshold = 0.3
         
-        # Boss specifieke aanvallen
+        # Boss specifieke aanvallen per fase
         self.multi_shot_cooldown = 4000
         self.last_multi_shot = 0
+        
+        # Fase 2: Spin attack
+        self.spin_attack_cooldown = 5000
+        self.last_spin_attack = 0
+        self.is_spinning = False
+        self.spin_timer = 0
+        self.spin_duration = 2000
+        
+        # Fase 3: Summon minions (conceptueel - spawnt extra projectielen)
+        self.barrage_cooldown = 6000
+        self.last_barrage = 0
         
         # Telegraph voor boss attacks
         self.boss_telegraph_duration = 400
@@ -1021,16 +1073,15 @@ class Boss(Enemy):
             return
             
         current_time = pygame.time.get_ticks()
-            
-        # Rage mode
-        if self.health / self.max_health < self.rage_threshold and not self.rage_mode:
-            self.rage_mode = True
-            self.speed *= 1.8
-            self.damage = int(self.damage * 1.5)
-            self.projectile_damage = int(self.projectile_damage * 1.5)
-            self.attack_cooldown = 400
-            self.ranged_cooldown = 800
-            self.animation_speed = 100
+        
+        # Check fase transitie
+        self._check_phase_transition()
+        
+        # Update spin attack
+        if self.is_spinning:
+            self._update_spin_attack(dt, player)
+            self._update_projectiles(dt)
+            return
             
         # Afstand tot speler
         dx = player.x - self.x
@@ -1047,22 +1098,116 @@ class Boss(Enemy):
             self.is_moving = False
             return
             
-        # Ranged attack
+        # Fase-specifieke aanvallen
         if distance > self.attack_range and distance < self.ranged_attack_range:
-            if current_time - self.last_ranged_attack > self.ranged_cooldown:
-                if self._has_line_of_sight(player.x, player.y):
-                    # Multi-shot in rage mode
-                    if self.rage_mode and current_time - self.last_multi_shot > self.multi_shot_cooldown:
-                        self._fire_multi_shot(player.x, player.y)
-                        self.last_multi_shot = current_time
-                    else:
-                        self._fire_projectile(player.x, player.y)
-                    self.last_ranged_attack = current_time
+            if self._has_line_of_sight(player.x, player.y):
+                self._execute_phase_attack(player, distance, current_time)
         
         self._update_projectiles(dt)
             
         # Normale enemy update voor beweging
         super().update(dt, player, door_manager, enemy_manager)
+        
+    def _check_phase_transition(self):
+        """Check en voer fase transities uit"""
+        health_pct = self.health / self.max_health
+        
+        new_phase = 1
+        if health_pct <= 0.25:
+            new_phase = 4  # Rage fase
+        elif health_pct <= 0.50:
+            new_phase = 3
+        elif health_pct <= 0.75:
+            new_phase = 2
+            
+        if new_phase > self.current_phase:
+            self._transition_to_phase(new_phase)
+            
+    def _transition_to_phase(self, phase):
+        """Transitie naar nieuwe fase met stat boosts"""
+        self.current_phase = phase
+        
+        if phase == 2:
+            # Fase 2: Sneller, spin attack unlocked
+            self.speed = self.base_speed * 1.2
+            self.ranged_cooldown = int(self.ranged_cooldown * 0.9)
+        elif phase == 3:
+            # Fase 3: Nog sneller, barrage attack
+            self.speed = self.base_speed * 1.4
+            self.ranged_cooldown = int(self.ranged_cooldown * 0.8)
+            self.projectile_speed *= 1.2
+        elif phase == 4:
+            # Fase 4: Rage mode
+            self.rage_mode = True
+            self.speed = self.base_speed * 1.8
+            self.damage = int(self.damage * 1.5)
+            self.projectile_damage = int(self.projectile_damage * 1.5)
+            self.attack_cooldown = 400
+            self.ranged_cooldown = 800
+            self.animation_speed = 100
+            
+    def _execute_phase_attack(self, player, distance, current_time):
+        """Voer fase-specifieke aanval uit"""
+        # Basis ranged attack
+        if current_time - self.last_ranged_attack > self.ranged_cooldown:
+            if self.current_phase >= 4 and current_time - self.last_multi_shot > self.multi_shot_cooldown:
+                # Rage: Multi-shot
+                self._fire_multi_shot(player.x, player.y)
+                self.last_multi_shot = current_time
+            elif self.current_phase >= 3 and current_time - self.last_barrage > self.barrage_cooldown:
+                # Fase 3: Barrage attack
+                self._fire_barrage(player.x, player.y)
+                self.last_barrage = current_time
+            else:
+                self._fire_projectile(player.x, player.y)
+            self.last_ranged_attack = current_time
+            
+        # Fase 2+: Spin attack
+        if self.current_phase >= 2 and distance < 4.0:
+            if current_time - self.last_spin_attack > self.spin_attack_cooldown:
+                self._start_spin_attack()
+                self.last_spin_attack = current_time
+                
+    def _start_spin_attack(self):
+        """Start spin attack"""
+        self.is_spinning = True
+        self.spin_timer = 0
+        
+    def _update_spin_attack(self, dt, player):
+        """Update spin attack - schiet in alle richtingen"""
+        self.spin_timer += dt
+        self.is_moving = False
+        
+        # Schiet elke 200ms in een andere richting
+        spin_interval = 150 if self.rage_mode else 200
+        shots_fired = int(self.spin_timer / spin_interval)
+        
+        if shots_fired > 0 and self.spin_timer % spin_interval < dt:
+            # Schiet in huidige spin richting
+            angle = (self.spin_timer / self.spin_duration) * math.pi * 4  # 2 volledige rotaties
+            tx = self.x + math.cos(angle) * 10
+            ty = self.y + math.sin(angle) * 10
+            self._fire_projectile(tx, ty)
+            
+        if self.spin_timer >= self.spin_duration:
+            self.is_spinning = False
+            
+    def _fire_barrage(self, target_x, target_y):
+        """Schiet een barrage van projectielen"""
+        # Snelle burst van 5 projectielen
+        dx = target_x - self.x
+        dy = target_y - self.y
+        base_angle = math.atan2(dy, dx)
+        
+        for i in range(5):
+            # Kleine variatie in richting en timing
+            angle = base_angle + random.uniform(-0.2, 0.2)
+            tx = self.x + math.cos(angle) * 10
+            ty = self.y + math.sin(angle) * 10
+            
+            speed = self.projectile_speed * random.uniform(0.8, 1.2)
+            proj = Projectile(self.x, self.y, tx, ty, self.projectile_damage, speed)
+            self.projectiles.append(proj)
         
     def _fire_projectile(self, target_x, target_y):
         """Schiet een vuurbal"""
@@ -1186,6 +1331,15 @@ class Boss(Enemy):
         if self.rage_mode:
             return (255, 100, 0)  # Oranje in rage
         return (255, 50, 50)  # Rood
+        
+    def get_drop(self):
+        """Boss dropt altijd goede items"""
+        drops = []
+        # Boss dropt health pack + veel ammo
+        drops.append(EnemyDrop(self.x - 0.3, self.y, 'health_pack'))
+        drops.append(EnemyDrop(self.x + 0.3, self.y, 'ammo'))
+        drops.append(EnemyDrop(self.x, self.y - 0.3, 'health'))
+        return drops  # Return list voor boss
 
 
 class DamageNumber:
@@ -1219,6 +1373,207 @@ class DamageNumber:
         return 255
 
 
+class EnemyDrop:
+    """Item dat een vijand dropt bij dood"""
+    
+    DROP_TYPES = {
+        'health': {'color': (50, 255, 50), 'value': 15, 'chance': 0.25},
+        'ammo': {'color': (255, 200, 50), 'value': 10, 'chance': 0.35},
+        'health_pack': {'color': (255, 100, 100), 'value': 1, 'chance': 0.10},
+    }
+    
+    def __init__(self, x, y, drop_type='ammo'):
+        self.x = x
+        self.y = y
+        self.drop_type = drop_type
+        self.alive = True
+        self.lifetime = 0
+        self.max_lifetime = 15000  # 15 seconden voordat het verdwijnt
+        self.pickup_range = 0.8
+        self.bob_offset = 0
+        
+        drop_data = self.DROP_TYPES.get(drop_type, self.DROP_TYPES['ammo'])
+        self.color = drop_data['color']
+        self.value = drop_data['value']
+        
+        self.sprite = self._create_sprite()
+        
+    def _create_sprite(self):
+        """Maak drop sprite"""
+        size = 24
+        sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+        cx, cy = size // 2, size // 2
+        
+        if self.drop_type == 'health':
+            # Groen kruis
+            pygame.draw.rect(sprite, self.color, (cx - 2, cy - 8, 4, 16))
+            pygame.draw.rect(sprite, self.color, (cx - 8, cy - 2, 16, 4))
+            pygame.draw.rect(sprite, (100, 255, 100), (cx - 1, cy - 7, 2, 14))
+        elif self.drop_type == 'ammo':
+            # Gele kogels
+            pygame.draw.ellipse(sprite, self.color, (cx - 6, cy - 8, 5, 16))
+            pygame.draw.ellipse(sprite, self.color, (cx + 1, cy - 8, 5, 16))
+            pygame.draw.ellipse(sprite, (255, 255, 150), (cx - 5, cy - 7, 3, 10))
+        elif self.drop_type == 'health_pack':
+            # Rode doos met kruis
+            pygame.draw.rect(sprite, (200, 50, 50), (cx - 8, cy - 6, 16, 12))
+            pygame.draw.rect(sprite, (255, 255, 255), (cx - 2, cy - 4, 4, 8))
+            pygame.draw.rect(sprite, (255, 255, 255), (cx - 6, cy - 1, 12, 2))
+            
+        # Glow effect
+        glow = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(glow, (*self.color, 50), (cx, cy), 10)
+        sprite.blit(glow, (0, 0), special_flags=pygame.BLEND_RGBA_ADD)
+        
+        return sprite
+        
+    def update(self, dt):
+        """Update drop"""
+        self.lifetime += dt
+        
+        # Bob animatie
+        self.bob_offset = math.sin(self.lifetime * 0.005) * 0.1
+        
+        # Fade out in laatste 3 seconden
+        if self.lifetime > self.max_lifetime - 3000:
+            # Knipperen
+            if int(self.lifetime / 200) % 2 == 0:
+                self.sprite.set_alpha(128)
+            else:
+                self.sprite.set_alpha(255)
+        
+        if self.lifetime >= self.max_lifetime:
+            self.alive = False
+            
+    def try_pickup(self, player_x, player_y):
+        """Check of speler de drop oppakt"""
+        if not self.alive:
+            return None
+            
+        dx = player_x - self.x
+        dy = player_y - self.y
+        dist = math.sqrt(dx*dx + dy*dy)
+        
+        if dist < self.pickup_range:
+            self.alive = False
+            return {'type': self.drop_type, 'value': self.value}
+            
+        return None
+        
+    def get_sprite(self):
+        return self.sprite if self.alive else None
+
+
+class KillCombo:
+    """Houdt kill combo's bij voor bonus rewards"""
+    
+    def __init__(self):
+        self.combo_count = 0
+        self.combo_timer = 0
+        self.combo_timeout = 3000  # 3 seconden om combo te behouden
+        self.max_combo = 0
+        self.combo_multiplier = 1.0
+        
+        # Bonus thresholds
+        self.thresholds = {
+            3: {'name': 'TRIPLE KILL!', 'health_bonus': 5, 'ammo_bonus': 5},
+            5: {'name': 'KILLING SPREE!', 'health_bonus': 10, 'ammo_bonus': 10},
+            7: {'name': 'RAMPAGE!', 'health_bonus': 15, 'ammo_bonus': 15},
+            10: {'name': 'UNSTOPPABLE!', 'health_bonus': 25, 'ammo_bonus': 20},
+        }
+        
+    def add_kill(self):
+        """Voeg een kill toe aan de combo"""
+        self.combo_count += 1
+        self.combo_timer = 0
+        
+        if self.combo_count > self.max_combo:
+            self.max_combo = self.combo_count
+            
+        # Update multiplier
+        self.combo_multiplier = 1.0 + (self.combo_count - 1) * 0.1
+        
+        # Check voor bonus
+        bonus = None
+        for threshold, reward in sorted(self.thresholds.items()):
+            if self.combo_count == threshold:
+                bonus = reward
+                break
+                
+        return bonus
+        
+    def update(self, dt):
+        """Update combo timer"""
+        if self.combo_count > 0:
+            self.combo_timer += dt
+            if self.combo_timer >= self.combo_timeout:
+                self.combo_count = 0
+                self.combo_multiplier = 1.0
+                
+    def get_display_info(self):
+        """Haal info op voor HUD display"""
+        if self.combo_count < 2:
+            return None
+            
+        time_left = max(0, self.combo_timeout - self.combo_timer) / 1000
+        return {
+            'count': self.combo_count,
+            'multiplier': self.combo_multiplier,
+            'time_left': time_left,
+        }
+
+
+class DamageIndicator:
+    """Toont richting van inkomende schade"""
+    
+    def __init__(self):
+        self.indicators = []  # List of {'angle': float, 'intensity': float, 'timer': int}
+        self.duration = 1000  # 1 seconde zichtbaar
+        
+    def add_damage(self, player_x, player_y, player_angle, damage_x, damage_y, damage_amount):
+        """Voeg damage indicator toe"""
+        # Bereken hoek van schade relatief aan speler kijkrichting
+        dx = damage_x - player_x
+        dy = damage_y - player_y
+        damage_angle = math.atan2(dy, dx)
+        
+        # Relatief aan speler kijkrichting
+        relative_angle = damage_angle - player_angle
+        
+        # Normaliseer naar -pi tot pi
+        while relative_angle > math.pi:
+            relative_angle -= 2 * math.pi
+        while relative_angle < -math.pi:
+            relative_angle += 2 * math.pi
+            
+        # Intensity gebaseerd op damage
+        intensity = min(1.0, damage_amount / 30)
+        
+        self.indicators.append({
+            'angle': relative_angle,
+            'intensity': intensity,
+            'timer': 0,
+        })
+        
+    def update(self, dt):
+        """Update indicators"""
+        for ind in self.indicators[:]:
+            ind['timer'] += dt
+            if ind['timer'] >= self.duration:
+                self.indicators.remove(ind)
+                
+    def get_indicators(self):
+        """Haal actieve indicators op voor rendering"""
+        result = []
+        for ind in self.indicators:
+            alpha = 1.0 - (ind['timer'] / self.duration)
+            result.append({
+                'angle': ind['angle'],
+                'intensity': ind['intensity'] * alpha,
+            })
+        return result
+
+
 class EnemyManager:
     """Beheert alle vijanden met verbeterde feedback"""
     
@@ -1230,17 +1585,23 @@ class EnemyManager:
         self.game_map = game_map
         self.is_final_boss = is_final_boss
         
-        # Damage numbers voor feedback
+        # Feedback systemen
         self.damage_numbers = []
+        self.drops = []
+        self.kill_combo = KillCombo()
+        self.damage_indicator = DamageIndicator()
         
         self.spawn_enemies(custom_positions, boss_position)
         
     def spawn_enemies(self, custom_positions=None, boss_position=None):
-        """Spawn vijanden op aangegeven of standaard posities"""
+        """Spawn vijanden op aangegeven of standaard posities met difficulty scaling"""
         if custom_positions is not None:
             for i, (x, y) in enumerate(custom_positions):
                 enemy_type = Enemy.ENEMY_TYPES[i % len(Enemy.ENEMY_TYPES)]
-                self.enemies.append(Enemy(x, y, enemy_type))
+                enemy = Enemy(x, y, enemy_type)
+                # Apply difficulty scaling
+                enemy.apply_difficulty_scaling(self.level)
+                self.enemies.append(enemy)
         else:
             if self.level == 1:
                 self._spawn_level1_enemies()
@@ -1278,9 +1639,22 @@ class EnemyManager:
         self.enemies.append(self.boss)
         
     def update(self, dt, player, door_manager=None):
-        """Update alle vijanden"""
+        """Update alle vijanden en systemen"""
         for enemy in self.enemies:
+            # Check of enemy net doodging voor drop
+            was_dying = enemy.state == EnemyState.DYING
             enemy.update(dt, player, door_manager, self)
+            
+            # Check of vijand net dood is gegaan (state changed to DEAD)
+            if was_dying and enemy.state == EnemyState.DEAD:
+                # Genereer drop(s)
+                drop_result = enemy.get_drop()
+                if drop_result:
+                    # Boss returns list, normale vijanden single drop
+                    if isinstance(drop_result, list):
+                        self.drops.extend(drop_result)
+                    else:
+                        self.drops.append(drop_result)
             
         # Update damage numbers
         for dn in self.damage_numbers[:]:
@@ -1288,9 +1662,38 @@ class EnemyManager:
             if not dn.alive:
                 self.damage_numbers.remove(dn)
                 
+        # Update drops
+        for drop in self.drops[:]:
+            drop.update(dt)
+            if not drop.alive:
+                self.drops.remove(drop)
+                
+        # Update kill combo
+        self.kill_combo.update(dt)
+        
+        # Update damage indicator
+        self.damage_indicator.update(dt)
+                
     def add_damage_number(self, x, y, damage, is_crit=False):
         """Voeg damage number toe"""
         self.damage_numbers.append(DamageNumber(x, y, damage, is_crit))
+        
+    def register_kill(self):
+        """Registreer een kill voor combo systeem"""
+        return self.kill_combo.add_kill()
+        
+    def check_drop_pickups(self, player_x, player_y):
+        """Check of speler drops oppakt"""
+        pickups = []
+        for drop in self.drops[:]:
+            result = drop.try_pickup(player_x, player_y)
+            if result:
+                pickups.append(result)
+        return pickups
+        
+    def add_damage_indicator(self, player_x, player_y, player_angle, damage_x, damage_y, damage_amount):
+        """Voeg damage richting indicator toe"""
+        self.damage_indicator.add_damage(player_x, player_y, player_angle, damage_x, damage_y, damage_amount)
             
     def get_enemy_at_ray(self, player_x, player_y, angle, max_distance=MAX_DEPTH):
         """Vind vijand in schietrichting"""
@@ -1330,32 +1733,50 @@ class EnemyManager:
         return None, 0
         
     def check_player_damage(self, player):
-        """Check schade van alle vijandelijke aanvallen"""
-        damage = 0
+        """Check schade van alle vijandelijke aanvallen met damage indicator"""
+        total_damage = 0
         
         for enemy in self.enemies:
             if not enemy.alive or enemy.state in [EnemyState.DEAD, EnemyState.DYING]:
                 continue
                 
+            enemy_damage = 0
+                
             # Kogel damage
             if hasattr(enemy, 'get_bullet_damage'):
                 bullet_damage = enemy.get_bullet_damage(player.x, player.y)
-                damage += bullet_damage
+                enemy_damage += bullet_damage
                 
             # Melee damage (chargers)
             if hasattr(enemy, 'get_melee_damage'):
                 melee_damage = enemy.get_melee_damage(player.x, player.y)
-                damage += melee_damage
+                enemy_damage += melee_damage
                     
             # Boss projectile damage
             if hasattr(enemy, 'is_boss') and hasattr(enemy, 'get_projectile_damage'):
                 proj_damage = enemy.get_projectile_damage(player.x, player.y)
-                damage += proj_damage
+                enemy_damage += proj_damage
+                
+            # Voeg damage indicator toe als er schade is
+            if enemy_damage > 0:
+                self.add_damage_indicator(
+                    player.x, player.y, player.angle,
+                    enemy.x, enemy.y, enemy_damage
+                )
+                total_damage += enemy_damage
                     
-        return damage
+        return total_damage
         
     def render(self, sprite_renderer):
-        """Render alle vijanden met health bars"""
+        """Render alle vijanden met health bars en drops"""
+        # Render drops eerst (achtergrond)
+        for drop in self.drops:
+            if drop.alive:
+                drop_sprite = drop.get_sprite()
+                if drop_sprite:
+                    sprite_renderer.add_sprite(drop_sprite, drop.x, drop.y + drop.bob_offset, 0.15, 0.3)
+        
+        # Render vijanden
         for enemy in self.enemies:
             if enemy.state == EnemyState.DEAD:
                 continue

@@ -106,6 +106,8 @@ class Game:
         self.damage_flash_time = 0
         self.kill_text = ""
         self.kill_text_time = 0
+        self.combo_bonus_text = ""
+        self.combo_bonus_time = 0
         
         # Friendly bot dialogue system
         self.bot_dialogue_active = False
@@ -483,12 +485,32 @@ class Game:
                 self.hit_marker_time = pygame.time.get_ticks()
                 
                 if killed:
+                    # Register kill voor combo
+                    combo_bonus = self.enemy_manager.register_kill()
+                    
                     # Speciale tekst voor boss kill
                     if hasattr(enemy, 'is_boss'):
                         self.kill_text = "DEMON LORD DEFEATED!"
                     else:
                         self.kill_text = "ENEMY KILLED!"
                     self.kill_text_time = pygame.time.get_ticks()
+                    
+                    # Combo bonus toepassen
+                    if combo_bonus:
+                        self.combo_bonus_text = combo_bonus['name']
+                        self.combo_bonus_time = pygame.time.get_ticks()
+                        # Bonus rewards
+                        self.player_health = min(self.player_max_health, 
+                                                self.player_health + combo_bonus['health_bonus'])
+                        self.weapons.add_ammo_all(combo_bonus['ammo_bonus'])
+                        
+                    # Check victory na kill
+                    if self.level_data.get('has_boss', False) and self.enemy_manager.alive_count == 0:
+                        if self.current_level >= self.total_levels:
+                            self.victory = True
+                        else:
+                            self.transitioning = True
+                            self.transition_time = pygame.time.get_ticks()
                 else:
                     # Hit feedback tekst
                     if is_crit:
@@ -496,24 +518,6 @@ class Game:
                     else:
                         self.kill_text = f"HIT! -{damage}"
                     self.kill_text_time = pygame.time.get_ticks()
-                    
-                    # Check victory - alleen in finale boss level als alle vijanden verslagen
-                    if self.level_data.get('has_boss', False) and self.enemy_manager.alive_count == 0:
-                        if self.current_level >= self.total_levels:
-                            # Finale overwinning!
-                            self.victory = True
-                        else:
-                            # Naar volgend level
-                            self.transitioning = True
-                            self.transition_time = pygame.time.get_ticks()
-                            
-                # Check victory na kill
-                if killed and self.level_data.get('has_boss', False) and self.enemy_manager.alive_count == 0:
-                    if self.current_level >= self.total_levels:
-                        self.victory = True
-                    else:
-                        self.transitioning = True
-                        self.transition_time = pygame.time.get_ticks()
                         
     def use_health_pack(self):
         """Gebruik een health pack uit inventory"""
@@ -587,6 +591,23 @@ class Game:
             self.weapons.add_ammo_all(ammo_picked)
             self.kill_text = f"+{ammo_picked} AMMO!"
             self.kill_text_time = pygame.time.get_ticks()
+            
+        # Check enemy drops pickup
+        pickups = self.enemy_manager.check_drop_pickups(self.player.x, self.player.y)
+        for pickup in pickups:
+            if pickup['type'] == 'health':
+                self.player_health = min(self.player_max_health, 
+                                        self.player_health + pickup['value'])
+                self.kill_text = f"+{pickup['value']} HP!"
+                self.kill_text_time = pygame.time.get_ticks()
+            elif pickup['type'] == 'ammo':
+                self.weapons.add_ammo_all(pickup['value'])
+                self.kill_text = f"+{pickup['value']} AMMO!"
+                self.kill_text_time = pygame.time.get_ticks()
+            elif pickup['type'] == 'health_pack':
+                self.health_packs_inventory += pickup['value']
+                self.kill_text = "+1 HEALTH PACK!"
+                self.kill_text_time = pygame.time.get_ticks()
         
         # Automatisch vuur (houd muis/spatie ingedrukt)
         mouse_buttons = pygame.mouse.get_pressed()
@@ -946,6 +967,27 @@ class Game:
             kill_rect = kill_surf.get_rect(center=(HALF_WIDTH, 100))
             self.screen.blit(kill_surf, kill_rect)
             
+        # Combo bonus text
+        if current_time - self.combo_bonus_time < 2000:
+            alpha = int(255 * (1 - (current_time - self.combo_bonus_time) / 2000))
+            combo_surf = self.big_font.render(self.combo_bonus_text, True, (255, 200, 50))
+            combo_surf.set_alpha(alpha)
+            combo_rect = combo_surf.get_rect(center=(HALF_WIDTH, 150))
+            self.screen.blit(combo_surf, combo_rect)
+            
+        # Kill combo display
+        combo_info = self.enemy_manager.kill_combo.get_display_info()
+        if combo_info:
+            combo_count_text = f"COMBO x{combo_info['count']} ({combo_info['multiplier']:.1f}x)"
+            time_bar_width = int(100 * (combo_info['time_left'] / 3))
+            
+            combo_surf = self.font.render(combo_count_text, True, (255, 200, 100))
+            self.screen.blit(combo_surf, (WIDTH - 220, 60))
+            
+            # Combo timer bar
+            pygame.draw.rect(self.screen, (60, 60, 60), (WIDTH - 220, 90, 100, 8))
+            pygame.draw.rect(self.screen, (255, 200, 100), (WIDTH - 220, 90, time_bar_width, 8))
+            
         # Friendly bot interact prompt (when near bot)
         if self.friendly_bot_manager and not self.bot_dialogue_active:
             self.friendly_bot_manager.draw_interact_prompt(self.screen, self.font)
@@ -970,6 +1012,62 @@ class Game:
             alpha = int(100 * (1 - (current_time - self.damage_flash_time) / 200))
             flash.fill((255, 0, 0, alpha))
             self.screen.blit(flash, (0, 0))
+            
+    def draw_damage_indicators(self):
+        """Teken richtingsindicators voor inkomende schade"""
+        indicators = self.enemy_manager.damage_indicator.get_indicators()
+        
+        for ind in indicators:
+            angle = ind['angle']
+            intensity = ind['intensity']
+            
+            # Bereken positie op scherm rand
+            # angle: -pi = links, 0 = voor, pi = achter, pi/2 = rechts
+            
+            # Indicator grootte en kleur
+            size = int(40 + intensity * 40)
+            alpha = int(200 * intensity)
+            
+            # Bepaal positie en rotatie gebaseerd op hoek
+            if abs(angle) < math.pi / 4:
+                # Voor - bovenkant scherm
+                x = HALF_WIDTH + int(angle * HALF_WIDTH * 2)
+                y = 50
+                rotation = 180
+            elif abs(angle) > 3 * math.pi / 4:
+                # Achter - onderkant scherm
+                norm_angle = angle if angle > 0 else angle + 2 * math.pi
+                x = HALF_WIDTH - int((norm_angle - math.pi) * HALF_WIDTH)
+                y = HEIGHT - 50
+                rotation = 0
+            elif angle > 0:
+                # Rechts
+                x = WIDTH - 50
+                y = HALF_HEIGHT + int((angle - math.pi/2) * HALF_HEIGHT * 2)
+                rotation = 270
+            else:
+                # Links
+                x = 50
+                y = HALF_HEIGHT - int((angle + math.pi/2) * HALF_HEIGHT * 2)
+                rotation = 90
+                
+            # Teken indicator (pijl/vignette)
+            indicator_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            
+            # Driehoek pijl
+            points = [
+                (size // 2, 0),
+                (0, size),
+                (size, size),
+            ]
+            pygame.draw.polygon(indicator_surf, (255, 50, 50, alpha), points)
+            pygame.draw.polygon(indicator_surf, (255, 100, 100, alpha), points, 3)
+            
+            # Roteer
+            rotated = pygame.transform.rotate(indicator_surf, rotation)
+            rect = rotated.get_rect(center=(x, y))
+            
+            self.screen.blit(rotated, rect)
             
     def draw_game_over(self):
         """Teken game over scherm"""
@@ -1049,6 +1147,9 @@ class Game:
         
         # Damage flash
         self.draw_damage_flash()
+        
+        # Damage direction indicators
+        self.draw_damage_indicators()
         
         # Wapen
         self.weapons.render(self.screen)
