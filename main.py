@@ -25,6 +25,7 @@ Levels:
 import pygame
 import sys
 import math
+import random
 from settings import *
 from player import Player
 from raycasting import RayCaster
@@ -464,8 +465,20 @@ class Game:
             if enemy:
                 # Bereken schade (minder op afstand)
                 weapon = self.weapons.current
-                damage = weapon.damage * (1 - distance / MAX_DEPTH * 0.5)
-                killed = enemy.take_damage(int(damage))
+                base_damage = weapon.damage * (1 - distance / MAX_DEPTH * 0.5)
+                
+                # Kritieke hit kans (15%)
+                is_crit = random.random() < 0.15
+                if is_crit:
+                    damage = int(base_damage * 1.5)
+                else:
+                    damage = int(base_damage)
+                
+                # Neem schade met knockback (pass player positie voor knockback richting)
+                killed = enemy.take_damage(damage, self.player.x, self.player.y)
+                
+                # Damage number feedback
+                self.enemy_manager.add_damage_number(enemy.x, enemy.y, damage, is_crit)
                 
                 self.hit_marker_time = pygame.time.get_ticks()
                 
@@ -475,6 +488,13 @@ class Game:
                         self.kill_text = "DEMON LORD DEFEATED!"
                     else:
                         self.kill_text = "ENEMY KILLED!"
+                    self.kill_text_time = pygame.time.get_ticks()
+                else:
+                    # Hit feedback tekst
+                    if is_crit:
+                        self.kill_text = f"CRITICAL HIT! -{damage}"
+                    else:
+                        self.kill_text = f"HIT! -{damage}"
                     self.kill_text_time = pygame.time.get_ticks()
                     
                     # Check victory - alleen in finale boss level als alle vijanden verslagen
@@ -486,6 +506,14 @@ class Game:
                             # Naar volgend level
                             self.transitioning = True
                             self.transition_time = pygame.time.get_ticks()
+                            
+                # Check victory na kill
+                if killed and self.level_data.get('has_boss', False) and self.enemy_manager.alive_count == 0:
+                    if self.current_level >= self.total_levels:
+                        self.victory = True
+                    else:
+                        self.transitioning = True
+                        self.transition_time = pygame.time.get_ticks()
                         
     def use_health_pack(self):
         """Gebruik een health pack uit inventory"""
@@ -897,7 +925,14 @@ class Game:
         
         # Kill text
         if current_time - self.kill_text_time < 1500:
-            kill_surf = self.font.render(self.kill_text, True, (255, 50, 50))
+            # Bepaal kleur op basis van tekst
+            if "CRITICAL" in self.kill_text:
+                kill_color = (255, 200, 50)
+            elif "KILLED" in self.kill_text or "DEFEATED" in self.kill_text:
+                kill_color = (255, 50, 50)
+            else:
+                kill_color = (255, 200, 100)
+            kill_surf = self.font.render(self.kill_text, True, kill_color)
             kill_rect = kill_surf.get_rect(center=(HALF_WIDTH, 100))
             self.screen.blit(kill_surf, kill_rect)
             
