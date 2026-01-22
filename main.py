@@ -120,6 +120,11 @@ class Game:
         self.game_over = False
         self.victory = False
         
+        # Invincibility frames na schade (voorkomt instant death)
+        self.invincibility_time = 0
+        self.invincibility_duration = 500  # 0.5 seconde onkwetsbaarheid na schade
+        self.max_damage_per_hit = 25  # Maximum schade per keer
+        
         # Centreer muis en reset relatieve beweging
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
         pygame.mouse.get_rel()  # Reset de relatieve beweging buffer
@@ -614,15 +619,22 @@ class Game:
         if mouse_buttons[0] or keys[pygame.K_SPACE]:
             self.shoot()
         
-        # Check vijand aanvallen
-        damage = self.enemy_manager.check_player_damage(self.player)
-        if damage > 0:
-            self.player_health -= damage
-            self.damage_flash_time = pygame.time.get_ticks()
-            
-            if self.player_health <= 0:
-                self.player_health = 0
-                self.game_over = True
+        # Check vijand aanvallen (met invincibility frames)
+        current_time = pygame.time.get_ticks()
+        
+        # Alleen schade nemen als niet in invincibility periode
+        if current_time - self.invincibility_time > self.invincibility_duration:
+            damage = self.enemy_manager.check_player_damage(self.player)
+            if damage > 0:
+                # Cap de schade per hit om instant death te voorkomen
+                damage = min(damage, self.max_damage_per_hit)
+                self.player_health -= damage
+                self.damage_flash_time = current_time
+                self.invincibility_time = current_time  # Start invincibility
+                
+                if self.player_health <= 0:
+                    self.player_health = 0
+                    self.game_over = True
                 
     def _start_next_level(self):
         """Start het volgende level"""
@@ -1005,12 +1017,31 @@ class Game:
         self.screen.blit(hint_text, (WIDTH - 380, HEIGHT - 25))
         
     def draw_damage_flash(self):
-        """Teken rood flash als speler geraakt wordt"""
+        """Teken rood flash als speler geraakt wordt + invincibility indicator"""
         current_time = pygame.time.get_ticks()
+        
+        # Rode flash bij schade
         if current_time - self.damage_flash_time < 200:
             flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
             alpha = int(100 * (1 - (current_time - self.damage_flash_time) / 200))
             flash.fill((255, 0, 0, alpha))
+            self.screen.blit(flash, (0, 0))
+        
+        # Subtiele gouden rand tijdens invincibility (na de initiële flash)
+        elif current_time - self.invincibility_time < self.invincibility_duration:
+            # Pulserend effect
+            time_left = self.invincibility_duration - (current_time - self.invincibility_time)
+            pulse = (math.sin(current_time * 0.02) + 1) * 0.5
+            alpha = int(30 + pulse * 30) * (time_left / self.invincibility_duration)
+            
+            # Teken rand overlay
+            flash = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            # Alleen de randen tekenen
+            border_width = 8
+            pygame.draw.rect(flash, (255, 200, 50, int(alpha)), (0, 0, WIDTH, border_width))  # Top
+            pygame.draw.rect(flash, (255, 200, 50, int(alpha)), (0, HEIGHT - border_width, WIDTH, border_width))  # Bottom
+            pygame.draw.rect(flash, (255, 200, 50, int(alpha)), (0, 0, border_width, HEIGHT))  # Left
+            pygame.draw.rect(flash, (255, 200, 50, int(alpha)), (WIDTH - border_width, 0, border_width, HEIGHT))  # Right
             self.screen.blit(flash, (0, 0))
             
     def draw_damage_indicators(self):

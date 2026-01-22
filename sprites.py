@@ -691,9 +691,13 @@ class SpriteRenderer:
                         
                         fog_factor = min(1, distance / MAX_DEPTH)
                         if fog_factor > 0.1:
-                            fog_surf = pygame.Surface((1, int(sprite_height)), pygame.SRCALPHA)
-                            fog_surf.fill((0, 0, 0, int(fog_factor * 150)))
+                            # Maak een kopie om de originele sprite niet aan te passen
                             col_surface = col_surface.copy()
-                            col_surface.blit(fog_surf, (0, 0))
+                            # Pas fog alleen toe op niet-transparante pixels
+                            # door BLEND_RGBA_MULT te gebruiken
+                            fog_surf = pygame.Surface((1, int(sprite_height)), pygame.SRCALPHA)
+                            darkness = int(255 * (1 - fog_factor * 0.6))
+                            fog_surf.fill((darkness, darkness, darkness, 255))
+                            col_surface.blit(fog_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
                         
                         screen.blit(col_surface, (col, y))

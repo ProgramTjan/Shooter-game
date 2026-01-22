@@ -54,7 +54,7 @@ class EnemyBullet:
         self.speed = speed
         self.color = color
         self.alive = True
-        self.hit_range = 0.5
+        self.hit_range = 0.35  # Kleinere hit range voor eerlijkere gameplay
         self.lifetime = 0
         self.max_lifetime = 5000
         
@@ -110,13 +110,13 @@ class Enemy:
     Verbeterde vijand met state machine en gedragstypes
     """
     
-    # Vijand types met stats
+    # Vijand types met stats (gebalanceerde damage waarden)
     ENEMY_TYPES = [
-        {'color': 'red', 'health': 120, 'speed': 0.0012, 'damage': 12, 'fire_rate': 1500, 'behavior': BehaviorType.RANGED},
-        {'color': 'green', 'health': 150, 'speed': 0.00096, 'damage': 18, 'fire_rate': 2000, 'behavior': BehaviorType.RANGED},
-        {'color': 'blue', 'health': 80, 'speed': 0.0022, 'damage': 25, 'fire_rate': 0, 'behavior': BehaviorType.CHARGER},
-        {'color': 'purple', 'health': 100, 'speed': 0.0016, 'damage': 14, 'fire_rate': 1800, 'behavior': BehaviorType.DODGER},
-        {'color': 'orange', 'health': 100, 'speed': 0.00144, 'damage': 15, 'fire_rate': 1300, 'behavior': BehaviorType.RANGED},
+        {'color': 'red', 'health': 120, 'speed': 0.0012, 'damage': 8, 'fire_rate': 1500, 'behavior': BehaviorType.RANGED},
+        {'color': 'green', 'health': 150, 'speed': 0.00096, 'damage': 10, 'fire_rate': 2000, 'behavior': BehaviorType.RANGED},
+        {'color': 'blue', 'health': 80, 'speed': 0.0022, 'damage': 15, 'fire_rate': 0, 'behavior': BehaviorType.CHARGER},
+        {'color': 'purple', 'health': 100, 'speed': 0.0016, 'damage': 8, 'fire_rate': 1800, 'behavior': BehaviorType.DODGER},
+        {'color': 'orange', 'health': 100, 'speed': 0.00144, 'damage': 9, 'fire_rate': 1300, 'behavior': BehaviorType.RANGED},
     ]
     
     # Kogel kleuren per vijand type
@@ -232,12 +232,22 @@ class Enemy:
         self.last_known_player_y = None
         
     def _generate_patrol_points(self):
-        """Genereer willekeurige patrol punten rond spawn positie"""
+        """Genereer willekeurige patrol punten rond spawn positie (alleen op geldige posities)"""
         points = [(self.spawn_x, self.spawn_y)]
-        for _ in range(random.randint(2, 4)):
+        attempts = 0
+        max_attempts = 20
+        
+        while len(points) < random.randint(3, 5) and attempts < max_attempts:
             offset_x = random.uniform(-3, 3)
             offset_y = random.uniform(-3, 3)
-            points.append((self.spawn_x + offset_x, self.spawn_y + offset_y))
+            new_x = self.spawn_x + offset_x
+            new_y = self.spawn_y + offset_y
+            
+            # Check of dit punt geldig is (geen muur)
+            if not is_wall(int(new_x), int(new_y)):
+                points.append((new_x, new_y))
+            attempts += 1
+            
         return points
         
     def _change_state(self, new_state):
@@ -716,12 +726,32 @@ class Enemy:
         return 0
                 
     def can_move_to(self, x, y, door_manager=None):
-        if is_wall(x, y):
-            return False
-        if is_door(x, y):
-            if door_manager:
-                return door_manager.can_pass(x, y)
-            return False
+        """Check of vijand naar positie kan bewegen met collision radius"""
+        # Collision radius - hoe breed de vijand is
+        collision_radius = 0.3
+        
+        # Check meerdere punten rond de vijand voor betere collision
+        check_points = [
+            (x, y),  # Midden
+            (x - collision_radius, y),  # Links
+            (x + collision_radius, y),  # Rechts
+            (x, y - collision_radius),  # Boven
+            (x, y + collision_radius),  # Onder
+            (x - collision_radius, y - collision_radius),  # Links-boven
+            (x + collision_radius, y - collision_radius),  # Rechts-boven
+            (x - collision_radius, y + collision_radius),  # Links-onder
+            (x + collision_radius, y + collision_radius),  # Rechts-onder
+        ]
+        
+        for check_x, check_y in check_points:
+            if is_wall(int(check_x), int(check_y)):
+                return False
+            if is_door(int(check_x), int(check_y)):
+                if door_manager:
+                    if not door_manager.can_pass(check_x, check_y):
+                        return False
+                else:
+                    return False
         return True
         
     def take_damage(self, damage, attacker_x=None, attacker_y=None):
@@ -765,21 +795,22 @@ class Enemy:
             return None  # 30% geen drop
             
     def apply_difficulty_scaling(self, level):
-        """Pas difficulty scaling toe gebaseerd op level"""
-        # Elke level verhoogt stats
-        scaling = 1.0 + (level - 1) * 0.15  # 15% per level
+        """Pas difficulty scaling toe gebaseerd op level (gebalanceerd)"""
+        # Elke level verhoogt stats - health schaalt meer dan damage
+        health_scaling = 1.0 + (level - 1) * 0.12  # 12% health per level
+        damage_scaling = 1.0 + (level - 1) * 0.08  # 8% damage per level (minder agressief)
         
-        self.health = int(self.health * scaling)
-        self.max_health = int(self.max_health * scaling)
-        self.damage = int(self.damage * scaling)
+        self.health = int(self.health * health_scaling)
+        self.max_health = int(self.max_health * health_scaling)
+        self.damage = int(self.damage * damage_scaling)
         
         # Speed scaling is minder agressief
-        speed_scaling = 1.0 + (level - 1) * 0.08  # 8% per level
+        speed_scaling = 1.0 + (level - 1) * 0.05  # 5% per level
         self.speed = self.base_speed * speed_scaling
         
-        # Fire rate wordt sneller (lager getal)
+        # Fire rate wordt iets sneller (maar niet te veel)
         if self.fire_rate > 0:
-            self.fire_rate = int(self.fire_rate / (1 + (level - 1) * 0.1))
+            self.fire_rate = int(self.fire_rate / (1 + (level - 1) * 0.05))
         
     def get_sprite(self):
         """Haal huidige sprite op met effecten"""
@@ -911,13 +942,13 @@ class Enemy:
 class Projectile:
     """Een projectiel geschoten door de boss - snel en dodelijk"""
     
-    def __init__(self, x, y, target_x, target_y, damage=25, speed=0.025):
+    def __init__(self, x, y, target_x, target_y, damage=15, speed=0.025):
         self.x = x
         self.y = y
         self.damage = damage
         self.speed = speed
         self.alive = True
-        self.hit_range = 0.8
+        self.hit_range = 0.5  # Kleinere hit range voor eerlijkere gameplay
         self.lifetime = 0
         self.max_lifetime = 8000
         
@@ -1003,17 +1034,17 @@ class Boss(Enemy):
             self.max_health = 800
             self.base_speed = 0.00096
             self.speed = self.base_speed
-            self.damage = 30
-            self.projectile_damage = 35
-            self.projectile_speed = 0.035
+            self.damage = 18  # Melee damage (verlaagd)
+            self.projectile_damage = 12  # Projectile damage (verlaagd)
+            self.projectile_speed = 0.030  # Iets langzamer
         else:
             self.health = 500
             self.max_health = 500
             self.base_speed = 0.0008
             self.speed = self.base_speed
-            self.damage = 25
-            self.projectile_damage = 25
-            self.projectile_speed = 0.028
+            self.damage = 15  # Melee damage (verlaagd)
+            self.projectile_damage = 10  # Projectile damage (verlaagd)
+            self.projectile_speed = 0.025  # Iets langzamer
             
         self.attack_range = 2.5
         self.attack_cooldown = 800
@@ -1137,14 +1168,14 @@ class Boss(Enemy):
             self.ranged_cooldown = int(self.ranged_cooldown * 0.8)
             self.projectile_speed *= 1.2
         elif phase == 4:
-            # Fase 4: Rage mode
+            # Fase 4: Rage mode (gebalanceerd)
             self.rage_mode = True
-            self.speed = self.base_speed * 1.8
-            self.damage = int(self.damage * 1.5)
-            self.projectile_damage = int(self.projectile_damage * 1.5)
-            self.attack_cooldown = 400
-            self.ranged_cooldown = 800
-            self.animation_speed = 100
+            self.speed = self.base_speed * 1.6
+            self.damage = int(self.damage * 1.2)  # Minder damage boost
+            self.projectile_damage = int(self.projectile_damage * 1.2)  # Minder damage boost
+            self.attack_cooldown = 500
+            self.ranged_cooldown = 1000
+            self.animation_speed = 120
             
     def _execute_phase_attack(self, player, distance, current_time):
         """Voer fase-specifieke aanval uit"""
@@ -1696,7 +1727,7 @@ class EnemyManager:
         self.damage_indicator.add_damage(player_x, player_y, player_angle, damage_x, damage_y, damage_amount)
             
     def get_enemy_at_ray(self, player_x, player_y, angle, max_distance=MAX_DEPTH):
-        """Vind vijand in schietrichting"""
+        """Vind vijand in schietrichting met line-of-sight check"""
         sin_a = math.sin(angle)
         cos_a = math.cos(angle)
         
@@ -1728,9 +1759,35 @@ class EnemyManager:
             hit_radius = 0.5 / distance if hasattr(enemy, 'is_boss') else 0.4 / distance
             
             if abs(delta) < hit_radius:
-                return enemy, distance
+                # Check of er een vrije zichtlijn is (geen muren tussen speler en vijand)
+                if self._has_clear_line_of_sight(player_x, player_y, enemy.x, enemy.y):
+                    return enemy, distance
                 
         return None, 0
+    
+    def _has_clear_line_of_sight(self, start_x, start_y, end_x, end_y):
+        """Check of er geen muren zijn tussen twee punten"""
+        dx = end_x - start_x
+        dy = end_y - start_y
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        if distance < 0.1:
+            return True
+            
+        # Meer stappen voor nauwkeurigere check
+        steps = int(distance * 4)
+        if steps < 2:
+            steps = 2
+            
+        for i in range(1, steps):
+            t = i / steps
+            check_x = start_x + dx * t
+            check_y = start_y + dy * t
+            
+            if is_wall(int(check_x), int(check_y)):
+                return False
+                
+        return True
         
     def check_player_damage(self, player):
         """Check schade van alle vijandelijke aanvallen met damage indicator"""
