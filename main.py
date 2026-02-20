@@ -125,6 +125,12 @@ class Game:
         self.invincibility_duration = 500  # 0.5 seconde onkwetsbaarheid na schade
         self.max_damage_per_hit = 25  # Maximum schade per keer
         
+        # Pre-genereer sterren voor story intro (eenmalig)
+        self._story_stars = [
+            (random.randint(0, WIDTH), random.randint(0, HEIGHT), random.randint(30, 100))
+            for _ in range(100)
+        ]
+
         # Centreer muis en reset relatieve beweging
         pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
         pygame.mouse.get_rel()  # Reset de relatieve beweging buffer
@@ -288,14 +294,9 @@ class Game:
         """Teken het story intro scherm"""
         # Donkere achtergrond
         self.screen.fill((5, 5, 15))
-        
-        # Sterren effect op achtergrond
-        import random
-        random.seed(42)
-        for _ in range(100):
-            x = random.randint(0, WIDTH)
-            y = random.randint(0, HEIGHT)
-            brightness = random.randint(30, 100)
+
+        # Sterren effect op achtergrond (pre-gegenereerd in __init__)
+        for (x, y, brightness) in self._story_stars:
             pygame.draw.circle(self.screen, (brightness, brightness, brightness), (x, y), 1)
         
         # Level titel bovenaan
@@ -412,7 +413,11 @@ class Game:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
-                    
+
+                # Restart op game over of victory
+                elif event.key == pygame.K_r and (self.game_over or self.victory):
+                    self.restart()
+
                 # Story intro handling
                 elif self.showing_story:
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
@@ -445,7 +450,7 @@ class Game:
                     self.use_health_pack()
                 elif event.key == pygame.K_i:
                     if self.friendly_bot_manager:
-                        self.friendly_bot_manager.try_interact(self.player, self)
+                        self.friendly_bot_manager.try_interact(self)
                     
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
@@ -1100,17 +1105,31 @@ class Game:
             
             self.screen.blit(rotated, rect)
             
+    def restart(self):
+        """Herstart het spel vanaf level 1"""
+        self.current_level = 1
+        self.game_over = False
+        self.victory = False
+        self.transitioning = False
+        self.player_health = self.player_max_health
+        self.health_packs_inventory = 1
+        self.weapons = WeaponManager()
+        self._load_level(1)
+        self._start_story()
+        pygame.mouse.set_pos(HALF_WIDTH, HALF_HEIGHT)
+        pygame.mouse.get_rel()
+
     def draw_game_over(self):
         """Teken game over scherm"""
         overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 180))
         self.screen.blit(overlay, (0, 0))
-        
+
         text = self.big_font.render("GAME OVER", True, (255, 50, 50))
         text_rect = text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT - 50))
         self.screen.blit(text, text_rect)
-        
-        sub_text = self.font.render("Press ESC to exit", True, (200, 200, 200))
+
+        sub_text = self.font.render("Press R to restart  |  Press ESC to exit", True, (200, 200, 200))
         sub_rect = sub_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 20))
         self.screen.blit(sub_text, sub_rect)
         
@@ -1143,7 +1162,7 @@ class Game:
         champion_rect = champion_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 70))
         self.screen.blit(champion_text, champion_rect)
         
-        exit_text = self.small_font.render("Press ESC to exit", True, (200, 200, 200))
+        exit_text = self.small_font.render("Press R to play again  |  Press ESC to exit", True, (200, 200, 200))
         exit_rect = exit_text.get_rect(center=(HALF_WIDTH, HALF_HEIGHT + 120))
         self.screen.blit(exit_text, exit_rect)
         
